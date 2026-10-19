@@ -32,7 +32,7 @@ RUNS = Path(__file__).resolve().parent / "runs"
 SAMPLES = ROOT / "samples"
 RULES = ROOT / "rules"
 MAX_UPLOAD_MB = 25
-RENDER_DPI = 110
+RENDER_DPI = 200  # crops in the UI magnify 6pt text, so the page image needs real resolution
 ALLOWED = {"artwork": {".pdf"}, "sheet": {".xlsx"}, "rules": {".json", ".md", ".txt"}}
 
 app = FastAPI(title="Esko AIForge artwork checker")

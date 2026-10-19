@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+/* Design tokens: semantic names only, components never use raw hex */
+@theme {
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+
+  --color-canvas: #f6f8fb;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f1f5f9;
+  --color-line: #e2e8f0;
+  --color-line-strong: #cbd5e1;
+  --color-ink: #0f172a;
+  --color-ink-muted: #475569;
+  --color-ink-faint: #64748b;
+
+  --color-primary: #1d4ed8;
+  --color-primary-hover: #1e40af;
+  --color-primary-soft: #eff6ff;
+
+  /* verdicts: always paired with an icon and a word, never colour alone */
+  --color-definite: #b91c1c;
+  --color-definite-soft: #fef2f2;
+  --color-definite-line: #fecaca;
+  --color-likely: #b45309;
+  --color-likely-soft: #fffbeb;
+  --color-likely-line: #fde68a;
+  --color-review: #1d4ed8;
+  --color-review-soft: #eff6ff;
+  --color-review-line: #bfdbfe;
+  --color-pass: #15803d;
+  --color-pass-soft: #f0fdf4;
+  --color-pass-line: #bbf7d0;
+
+  --radius-card: 12px;
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
+  --shadow-pop: 0 8px 24px rgb(15 23 42 / 0.12);
+}
+
+html {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
