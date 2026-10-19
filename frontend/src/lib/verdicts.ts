@@ -1,5 +1,5 @@
 import { CircleCheck, CircleHelp, OctagonAlert, TriangleAlert, type LucideIcon } from "lucide-react";
-import type { Verdict } from "./types";
+import type { Risk, Verdict } from "./types";
 
 export const VERDICTS: Record<Verdict, { label: string; hint: string; icon: LucideIcon; text: string; soft: string; line: string; stroke: string }> = {
   definite: {
@@ -53,3 +53,13 @@ export const CATEGORY_LABELS: Record<string, string> = {
   source_data: "Source data",
   ai_rules: "Rulebook (AI)",
 };
+
+// risk is what happens if it ships; shown next to the verdict (how sure we are)
+export const RISKS: Record<Risk, { label: string; hint: string }> = {
+  safety: { label: "Safety", hint: "Could harm a shopper, e.g. an allergen not declared" },
+  legal: { label: "Legal", hint: "Misbranding risk: mandatory information, claims, nutrition" },
+  production: { label: "Production", hint: "Print and conversion: folds, hidden objects, type size" },
+  data: { label: "Source data", hint: "The approved content sheet itself is wrong" },
+  brand: { label: "Brand", hint: "Approved copy, taglines, retailer style" },
+};
+export const RISK_ORDER: Risk[] = ["safety", "legal", "production", "data", "brand"];

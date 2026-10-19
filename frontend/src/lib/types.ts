@@ -1,6 +1,7 @@
 // Mirrors backend/checker models (Pydantic). Keep field names identical.
 
 export type Verdict = "definite" | "likely" | "review" | "pass";
+export type Risk = "safety" | "legal" | "production" | "data" | "brand";
 
 export interface BBox {
   x0: number;
@@ -23,6 +24,7 @@ export interface Finding {
   check: string;
   category: string;
   verdict: Verdict;
+  risk: Risk;
   title: string;
   explanation: string;
   rule_id: string | null;

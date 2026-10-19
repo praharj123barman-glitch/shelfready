@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Info, OctagonX, ShieldCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Finding, RunResponse, Verdict } from "@/lib/types";
+import { RISKS, RISK_ORDER } from "@/lib/verdicts";
 import { ArtworkViewer } from "./ArtworkViewer";
 import { CoverageTable } from "./CoverageTable";
 import { FindingDetail } from "./FindingDetail";
@@ -24,6 +25,11 @@ export function ResultsScreen({ run, onBack }: { run: RunResponse; onBack: () =>
     return { icon: OctagonX, text: `Not ready to launch: ${n} issue${n === 1 ? "" : "s"} to fix`, tone: "text-definite" };
   }, [report.ready_to_launch, s]);
   const Icon = headline.icon;
+  // what is at stake among the problems to fix (definite + likely)
+  const atStake = RISK_ORDER.map((r) => ({
+    r,
+    n: report.findings.filter((f) => f.risk === r && (f.verdict === "definite" || f.verdict === "likely")).length,
+  })).filter((x) => x.n > 0);
 
   return (
     <div className="flex h-dvh flex-col">
@@ -39,6 +45,16 @@ export function ResultsScreen({ run, onBack }: { run: RunResponse; onBack: () =>
             <b className="text-definite">{s.definite}</b> definite · <b className="text-likely">{s.likely}</b> likely ·{" "}
             <b className="text-review">{s.review}</b> need review · <b className="text-pass">{s.pass}</b> passed
           </p>
+          {atStake.length > 0 && (
+            <p className="text-xs text-ink-muted" aria-label="Issues to fix by risk">
+              {atStake.map(({ r, n }, i) => (
+                <span key={r}>
+                  {i > 0 && " · "}
+                  <b className={r === "safety" ? "text-definite" : "text-ink"}>{n}</b> {RISKS[r].label.toLowerCase()}
+                </span>
+              ))}
+            </p>
+          )}
           <p className="ml-auto truncate text-xs text-ink-faint" title={report.artwork}>
             {report.artwork}{report.content_sheet ? ` vs ${report.content_sheet}` : ""}
             {ai_ran && ai_models.length > 0 && ` · AI: ${ai_models.join(", ")}`}

@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import type { Finding, Verdict } from "@/lib/types";
 import { CATEGORY_LABELS, VERDICTS, VERDICT_ORDER } from "@/lib/verdicts";
-import { MethodTag, VerdictBadge } from "./VerdictBadge";
+import { MethodTag, RiskTag, VerdictBadge } from "./VerdictBadge";
 
 interface Props {
   findings: Finding[];
@@ -74,6 +74,7 @@ export function FindingsList({ findings, summary, filter, onFilter, method, onMe
                 <span className="text-sm font-medium leading-snug text-ink">{f.title}</span>
               </span>
               <span className="flex flex-wrap items-center gap-2 pl-0.5 text-xs text-ink-faint">
+                {f.verdict !== "pass" && <RiskTag risk={f.risk} />}
                 <span>{CATEGORY_LABELS[f.category] ?? f.category}</span>
                 {f.rule_id && <span className="font-mono">{f.rule_id}</span>}
                 <MethodTag method={f.method} confidence={f.confidence} />

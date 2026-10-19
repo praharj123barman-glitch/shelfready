@@ -66,11 +66,22 @@ class Evidence(BaseModel):
     cell: str | None = None  # spreadsheet cell, e.g. "B26"
 
 
+class Risk(str, Enum):
+    """What happens if this ships, independent of how sure we are (the verdict)."""
+
+    SAFETY = "safety"  # could harm a shopper: allergens, undeclared ingredients
+    LEGAL = "legal"  # misbranding: mandatory information, claims, nutrition
+    PRODUCTION = "production"  # print and conversion: folds, hidden objects, type size
+    DATA = "data"  # the approved source data itself is wrong
+    BRAND = "brand"  # approved copy, taglines, retailer style
+
+
 class Finding(BaseModel):
     id: str
     check: str  # machine name of the check that produced it
     category: str  # nutrition, claims, allergens, ingredients, net_quantity, ...
     verdict: Verdict
+    risk: Risk | None = None  # filled in by the engine from the check or category
     title: str
     explanation: str  # why it matters, in plain language
     rule_id: str | None = None

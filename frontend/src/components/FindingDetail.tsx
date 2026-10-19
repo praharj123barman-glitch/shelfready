@@ -8,7 +8,7 @@ import type { Evidence, Finding } from "@/lib/types";
 import { CATEGORY_LABELS, VERDICTS } from "@/lib/verdicts";
 import { ChatBox } from "./ChatBox";
 import { EvidenceCrop } from "./EvidenceCrop";
-import { MethodTag, VerdictBadge } from "./VerdictBadge";
+import { MethodTag, RiskTag, VerdictBadge } from "./VerdictBadge";
 
 const SOURCE: Record<Evidence["source"], { label: string; icon: typeof Calculator }> = {
   artwork: { label: "Artwork", icon: ImageIcon },
@@ -118,6 +118,7 @@ export function FindingDetail({ runId, finding, page }: { runId: string; finding
             <header className={`-mx-5 -mt-5 border-b px-5 pb-4 pt-5 ${VERDICTS[finding.verdict].soft} ${VERDICTS[finding.verdict].line}`}>
               <div className="flex flex-wrap items-center gap-2">
                 <VerdictBadge verdict={finding.verdict} size="md" />
+                {finding.verdict !== "pass" && <RiskTag risk={finding.risk} />}
                 <MethodTag method={finding.method} confidence={finding.confidence} />
                 <span className="text-xs text-ink-faint">{CATEGORY_LABELS[finding.category] ?? finding.category}</span>
               </div>

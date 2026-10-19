@@ -1,5 +1,5 @@
-import { VERDICTS } from "@/lib/verdicts";
-import type { Verdict } from "@/lib/types";
+import { RISKS, VERDICTS } from "@/lib/verdicts";
+import type { Risk, Verdict } from "@/lib/types";
 
 export function VerdictBadge({ verdict, size = "sm" }: { verdict: Verdict; size?: "sm" | "md" }) {
   const v = VERDICTS[verdict];
@@ -25,6 +25,18 @@ export function MethodTag({ method, confidence }: { method: "deterministic" | "a
   ) : (
     <span className="rounded border border-review-line bg-review-soft px-1.5 py-0.5 text-xs font-medium text-review" title="Judged by AI, evidence verified by code where possible">
       AI · {Math.round(confidence * 100)}% conf.
+    </span>
+  );
+}
+
+export function RiskTag({ risk }: { risk: Risk }) {
+  const r = RISKS[risk];
+  return (
+    <span
+      title={r.hint}
+      className={`rounded px-1.5 py-0.5 text-xs font-semibold ${risk === "safety" ? "bg-definite text-white" : "bg-surface-muted text-ink-muted"}`}
+    >
+      {r.label}
     </span>
   );
 }
