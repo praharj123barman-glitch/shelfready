@@ -52,6 +52,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   print_readiness: "Print readiness",
   source_data: "Source data",
   ai_rules: "Rulebook (AI)",
+  market: "Market",
 };
 
 // risk is what happens if it ships; shown next to the verdict (how sure we are)

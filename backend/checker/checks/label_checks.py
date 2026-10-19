@@ -7,13 +7,14 @@ import re
 
 from ..models import Evidence, Finding, Verdict
 from ..sections import net_quantity_lines
-from .base import CheckContext, art_evidence, fmt, sheet_evidence
+from .base import CheckContext, uses, art_evidence, fmt, sheet_evidence
 
 QTY = re.compile(r"^(?:net\s*wt\.?\s*)?(?P<num>\d+(?:\.\d+)?)\s*(?P<unit>g|kg|oz|lb|ml|l|fl\.?\s*oz)\b", re.I)
 GRAMS_PER_OZ = 28.349523125
 US_STATE = r"\b(A[LKZR]|C[AOT]|DE|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEINOST]|N[CDEHJMVY]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AT]|W[AIVY])\b"
 
 
+@uses("FDA-101.3")
 def check_statement_of_identity(ctx: CheckContext) -> list[Finding]:
     legal = (ctx.spec.value("legal_name_statement_of_identity") if ctx.spec else None) or ""
     core = re.split(r"\s+-\s+|[,;]", legal)[0].strip().lower() or "granola"
@@ -34,6 +35,7 @@ def _quantity_lines(ctx: CheckContext):
     return out
 
 
+@uses("FDA-101.105-PDP", "FDA-101.105-UNITS")
 def check_net_quantity(ctx: CheckContext) -> list[Finding]:
     found = _quantity_lines(ctx)
     if not found:
@@ -76,6 +78,7 @@ def check_net_quantity(ctx: CheckContext) -> list[Finding]:
     return findings
 
 
+@uses("FDA-101.5")
 def check_manufacturer(ctx: CheckContext) -> list[Finding]:
     anchor = next((ln for ln in ctx.art.copy_lines() if re.search(r"\b(produced|manufactured|distributed|packed)\s+(by|for)\b", ln.text, re.I)), None)
     if anchor is None:
@@ -107,6 +110,7 @@ def upc_check_digit_ok(digits: str) -> bool:
     return (10 - total % 10) % 10 == check
 
 
+@uses("DF-01")
 def check_barcode(ctx: CheckContext) -> list[Finding]:
     if not ctx.art.barcodes:
         return [ctx.finding("barcode", "mandatory", Verdict.REVIEW, "No barcode could be decoded",
@@ -131,6 +135,7 @@ def check_barcode(ctx: CheckContext) -> list[Finding]:
     return findings
 
 
+@uses("DF-06")
 def check_hidden_objects(ctx: CheckContext) -> list[Finding]:
     hidden = [ln for ln in ctx.art.lines if ln.hidden and ln.role == "copy"]
     if not hidden:
@@ -148,6 +153,7 @@ def check_hidden_objects(ctx: CheckContext) -> list[Finding]:
     )]
 
 
+@uses("DF-10")
 def check_dieline_marks(ctx: CheckContext) -> list[Finding]:
     guides = [ln for ln in ctx.art.lines if ln.role == "guide"]
     if not guides:

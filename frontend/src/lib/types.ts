@@ -17,6 +17,7 @@ export interface Evidence {
   bbox: BBox | null;
   line_ids: string[];
   cell: string | null;
+  note: string | null;
 }
 
 export interface Finding {

@@ -7,7 +7,7 @@ import re
 
 from ..models import Evidence, Finding, Verdict
 from ..sections import net_quantity_lines, split_ingredients
-from .base import CheckContext, art_evidence, block_evidence, sheet_evidence
+from .base import CheckContext, uses, art_evidence, block_evidence, sheet_evidence
 
 PCT = re.compile(r"\((\d+(?:\.\d+)?)%\)")
 
@@ -71,6 +71,7 @@ def diff_ingredients(artwork: list[str], approved: list[str]) -> list[dict]:
     return rows
 
 
+@uses("DF-01")
 def check_ingredients_match(ctx: CheckContext) -> list[Finding]:
     block = ctx.blocks.get("ingredients")
     approved = ctx.spec.value("ingredient_list") if ctx.spec else None
@@ -94,6 +95,7 @@ def check_ingredients_match(ctx: CheckContext) -> list[Finding]:
     )]
 
 
+@uses("DF-01")
 def check_text_fields(ctx: CheckContext) -> list[Finding]:
     """Short approved texts that must appear verbatim on the pack."""
     if ctx.spec is None:
@@ -126,6 +128,7 @@ def check_text_fields(ctx: CheckContext) -> list[Finding]:
     return findings
 
 
+@uses("DF-01")
 def check_unapproved_tagline(ctx: CheckContext) -> list[Finding]:
     """Large display copy that is neither a claim, the product name nor approved marketing copy."""
     if ctx.spec is None:
@@ -154,6 +157,7 @@ def _duplicates(items: list[str]) -> list[str]:
     return sorted({items[i] for i, k in enumerate(keys) if keys.count(k) > 1})
 
 
+@uses("FDA-101.4")
 def check_ingredient_structure(ctx: CheckContext) -> list[Finding]:
     findings: list[Finding] = []
     block = ctx.blocks.get("ingredients")
@@ -183,6 +187,7 @@ def check_ingredient_structure(ctx: CheckContext) -> list[Finding]:
     return findings
 
 
+@uses("FDA-101.9-SUBTOTALS")
 def check_sheet_consistency(ctx: CheckContext) -> list[Finding]:
     """The approved sheet can be wrong too: impossible numbers and open reviewer notes."""
     if ctx.spec is None:

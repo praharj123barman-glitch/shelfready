@@ -45,6 +45,7 @@ class CheckContext:
         rule_id: str | None = None,
         **kwargs,
     ) -> Finding:
+        rule_id = resolve_rule(self.rules, rule_id)
         rule = self.rules.get(rule_id) if rule_id else None
         return Finding(
             id=f"F{next(self._ids):03d}",
@@ -61,6 +62,45 @@ class CheckContext:
 
 Check = Callable[[CheckContext], list[Finding]]
 
+# The same requirement can come from different rule sources. When the rule a
+# check cites is not loaded, the first loaded equivalent is cited instead, so
+# a company rulebook (DF-*) and the market-independent core pack (CORE-*) both
+# work, and India's FSSAI rules take over US ones where the requirement is shared.
+EQUIVALENT_RULES: dict[str, tuple[str, ...]] = {
+    "DF-01": ("CORE-COPY",),
+    "DF-02": ("CORE-COPY",),
+    "DF-04": ("CORE-COPY",),
+    "DF-06": ("CORE-HIDDEN",),
+    "DF-10": ("CORE-DIELINE",),
+    "DF-11": ("CORE-FOLDS",),
+    "DF-03": ("FSSAI-VEGAN",),
+    "FDA-101.4": ("FSSAI-INGREDIENTS",),
+    "FDA-101.60-NAS": ("FSSAI-CLAIM-NAS",),
+    "FDA-101.9-SUBTOTALS": ("CORE-DATA",),
+}
+
+
+def uses(*rule_ids: str):
+    """Declare the rules a check implements. The engine runs the check only
+    when one of them (or an equivalent) is loaded: rules are data."""
+    def mark(fn):
+        fn.rule_ids = rule_ids
+        return fn
+    return mark
+
+
+def resolve_rule(rules: RuleSet, rule_id: str | None) -> str | None:
+    if rule_id is None or rules.get(rule_id):
+        return rule_id
+    return next((alt for alt in EQUIVALENT_RULES.get(rule_id, ()) if rules.get(alt)), rule_id)
+
+
+def check_applies(check: Check, rules: RuleSet) -> bool:
+    ids = getattr(check, "rule_ids", None)
+    if ids is None:
+        return True  # undeclared checks always run
+    return any(rules.get(resolve_rule(rules, i) or "") for i in ids)
+
 
 def union_bbox(lines: list[TextLine]) -> BBox | None:
     if not lines:
@@ -75,12 +115,14 @@ def union_bbox(lines: list[TextLine]) -> BBox | None:
 
 def art_evidence(lines: list[TextLine | None], text: str | None = None) -> Evidence:
     lines = [l for l in lines if l is not None]
+    hidden = any(l.hidden for l in lines)
     return Evidence(
         source="artwork",
         text=text if text is not None else " / ".join(l.text for l in lines),
         panel=lines[0].panel if lines else None,
         bbox=union_bbox(lines),
         line_ids=[l.id for l in lines],
+        note="This text is hidden under other artwork: the crop shows what covers it." if hidden else None,
     )
 
 

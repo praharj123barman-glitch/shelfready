@@ -74,11 +74,20 @@ class Feedback(BaseModel):
     reason: str = Field(default="", max_length=1000)
 
 
-def _sample_files() -> SampleSet:
+Market = Literal["US", "India"]
+# rule files per market: the regulation pack plus the layers that fit that market
+MARKET_RULES: dict[str, list[str]] = {
+    "US": ["us_fda_food.json", "dancing_fish_company_rulebook.md", "retailer_guidelines_demo.txt"],
+    "India": ["india_fssai_food.json", "artwork_approval_core.json"],
+}
+DEFAULT_RULES: dict[str, list[str]] = {"US": ["us_fda_food.json"], "India": ["india_fssai_food.json", "artwork_approval_core.json"]}
+
+
+def _sample_files(market: str = "US") -> SampleSet:
     return SampleSet(
         artwork="DancingFish_Granola_Berry_US_Carton.pdf",
         content_sheet="DancingFish_Granola_BerryCrunch_US_Content_Sheet.xlsx",
-        rule_files=["us_fda_food.json", "dancing_fish_company_rulebook.md", "retailer_guidelines_demo.txt"],
+        rule_files=MARKET_RULES[market],
     )
 
 
@@ -112,14 +121,15 @@ def health() -> Health:
 
 
 @app.get("/api/samples", response_model=SampleSet)
-def samples() -> SampleSet:
-    return _sample_files()
+def samples(market: Market = "US") -> SampleSet:
+    return _sample_files(market)
 
 
 @app.post("/api/review", response_model=RunResponse)
 async def create_review(
     use_samples: bool = Form(False),
     use_ai: bool = Form(True),
+    market: Market = Form("US"),
     artwork: UploadFile | None = File(None),
     content_sheet: UploadFile | None = File(None),
     rule_files: list[UploadFile] | None = File(None),
@@ -129,7 +139,7 @@ async def create_review(
     folder.mkdir(parents=True)
     try:
         if use_samples:
-            s = _sample_files()
+            s = _sample_files(market)
             art_path = Path(shutil.copy(SAMPLES / s.artwork, folder))
             sheet_path = Path(shutil.copy(SAMPLES / s.content_sheet, folder))
             rule_paths = [Path(shutil.copy(RULES / r, folder)) for r in s.rule_files]
@@ -139,8 +149,8 @@ async def create_review(
             art_path = await _save(artwork, "artwork", folder)
             sheet_path = await _save(content_sheet, "sheet", folder) if content_sheet else None
             rule_paths = [await _save(f, "rules", folder) for f in rule_files or []]
-            if not rule_paths:  # built-in US FDA pack when the user supplies no rules
-                rule_paths = [Path(shutil.copy(RULES / "us_fda_food.json", folder))]
+            if not rule_paths:  # the market's built-in packs when the user supplies no rules
+                rule_paths = [Path(shutil.copy(RULES / r, folder)) for r in DEFAULT_RULES[market]]
         result = review(art_path, sheet_path, rule_paths, use_ai=use_ai)
     except HTTPException:
         shutil.rmtree(folder, ignore_errors=True)

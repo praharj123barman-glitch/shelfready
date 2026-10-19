@@ -3,7 +3,12 @@
 import { motion } from "framer-motion";
 import { FileSpreadsheet, FileText, ScrollText, Sparkles, Upload } from "lucide-react";
 import { useState } from "react";
-import type { ReviewInput } from "@/lib/api";
+import type { Market, ReviewInput } from "@/lib/api";
+
+const MARKET_RULES: Record<Market, string[]> = {
+  US: ["US FDA labeling rule pack (21 CFR 101)", "Dancing Fish company rulebook (demo)", "Retailer guidelines in plain prose (demo, read by AI)"],
+  India: ["India FSSAI labelling and Legal Metrology pack", "Artwork approval core (any market)"],
+};
 
 interface Props {
   aiAvailable: boolean | null;
@@ -50,6 +55,7 @@ export function StartScreen({ aiAvailable, error, onStart }: Props) {
   const [sheet, setSheet] = useState<File[]>([]);
   const [rules, setRules] = useState<File[]>([]);
   const [useAi, setUseAi] = useState(true);
+  const [market, setMarket] = useState<Market>("US");
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-12">
@@ -68,15 +74,23 @@ export function StartScreen({ aiAvailable, error, onStart }: Props) {
           className="min-w-0 rounded-card border border-line bg-surface p-6 shadow-card md:col-span-2"
         >
           <h2 className="text-lg font-semibold">Try the Esko sample</h2>
-          <p className="mt-1 text-sm text-ink-muted">Dancing Fish granola carton (US), its content sheet, and three rule sources:</p>
+          <p className="mt-1 text-sm text-ink-muted">Dancing Fish granola carton, its content sheet, and the rules for:</p>
+          <div className="mt-3 inline-flex rounded-lg border border-line p-0.5" role="radiogroup" aria-label="Market">
+            {(["US", "India"] as const).map((m) => (
+              <button key={m} type="button" role="radio" aria-checked={market === m} onClick={() => setMarket(m)}
+                className={`cursor-pointer rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${market === m ? "bg-ink text-white" : "text-ink-muted hover:text-ink"}`}>
+                {m === "US" ? "United States" : "India"}
+              </button>
+            ))}
+          </div>
           <ul className="mt-4 space-y-2 text-sm">
-            <li className="flex gap-2"><ScrollText className="mt-0.5 size-4 text-ink-faint" aria-hidden />US FDA labeling rule pack (21 CFR 101)</li>
-            <li className="flex gap-2"><ScrollText className="mt-0.5 size-4 text-ink-faint" aria-hidden />Dancing Fish company rulebook (demo)</li>
-            <li className="flex gap-2"><ScrollText className="mt-0.5 size-4 text-ink-faint" aria-hidden />Retailer guidelines in plain prose (demo, read by AI)</li>
+            {MARKET_RULES[market].map((r) => (
+              <li key={r} className="flex gap-2"><ScrollText className="mt-0.5 size-4 text-ink-faint" aria-hidden />{r}</li>
+            ))}
           </ul>
           <button
             type="button"
-            onClick={() => onStart({ useSamples: true, useAi })}
+            onClick={() => onStart({ useSamples: true, useAi, market })}
             className="mt-6 w-full cursor-pointer rounded-lg bg-primary px-4 py-3 font-semibold text-white transition-colors hover:bg-primary-hover"
           >
             Review the sample carton
@@ -92,14 +106,14 @@ export function StartScreen({ aiAvailable, error, onStart }: Props) {
             <FilePick label="Artwork PDF" hint="Print-ready or proof PDF with live text" accept=".pdf" icon={FileText} files={artwork} onChange={setArtwork} required />
             <FilePick label="Approved content sheet" hint="Excel sheet with the approved copy and nutrition" accept=".xlsx" icon={FileSpreadsheet} files={sheet} onChange={setSheet} />
             <FilePick
-              label="Rules" hint="JSON rule pack, rulebook (.md) or any rules text (.txt). Default: US FDA pack"
+              label="Rules" hint={`JSON rule pack, rulebook (.md) or any rules text (.txt). Default: ${market === "US" ? "US FDA" : "India FSSAI"} pack`}
               accept=".json,.md,.txt" multiple icon={ScrollText} files={rules} onChange={setRules}
             />
           </div>
           <button
             type="button"
             disabled={!artwork.length}
-            onClick={() => onStart({ useSamples: false, useAi, artwork: artwork[0], sheet: sheet[0], rules })}
+            onClick={() => onStart({ useSamples: false, useAi, market, artwork: artwork[0], sheet: sheet[0], rules })}
             className="mt-6 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-primary px-4 py-3 font-semibold text-primary transition-colors hover:bg-primary-soft disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Upload className="size-4" aria-hidden /> Check my files

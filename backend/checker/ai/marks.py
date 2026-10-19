@@ -20,7 +20,9 @@ from .rule_checker import panel_images
 
 SYSTEM = """You inventory the logos, certification marks and symbols printed on a carton.
 You get one image per panel. List every distinct mark you can see: certification seals (organic, vegan,
-non-GMO, kosher, gluten free), recycling symbols, brand logos, barcodes and badges.
+non-GMO, kosher, gluten free, Jaivik Bharat), regulatory logos (FSSAI logo; the Indian vegetarian symbol, a green
+filled circle in a green square; the non-vegetarian symbol, a brown triangle in a brown square), recycling
+symbols, brand logos, barcodes and badges.
 Report only what is visible. Read the words printed inside each mark exactly; if they are too small to read
 with certainty, leave words_in_mark empty rather than guessing. Do not report marks that are not there."""
 
@@ -29,6 +31,16 @@ KNOWN_MARKS = {
     "certified vegan": r"certified\s*vegan|vegan\.org",
     "recyclable": r"recycl",
     "non-gmo": r"non[\s-]*gmo",
+    "veg symbol": r"\b(non[\s-]*)?veg(etarian)?\b.*\b(symbol|mark|logo)\b|\b(green|brown)\b.*\b(dot|circle|triangle)\b",
+    "fssai logo": r"fssai",
+    "jaivik bharat": r"jaivik|india\s*organic",
+}
+# India marks the FSSAI pack requires; each maps to the rule that requires it
+INDIA_REQUIRED = {
+    "veg symbol": ("FSSAI-VEG-MARK", "Vegetarian or non-vegetarian symbol not found",
+                   "Indian packaged food must show the green (veg) or brown (non-veg) symbol on the front panel near the name."),
+    "fssai logo": ("FSSAI-LICENSE", "FSSAI logo not found",
+                   "The FSSAI logo must appear on the label together with the licence number."),
 }
 
 
@@ -83,10 +95,28 @@ def check_marks(ctx: CheckContext) -> list[Finding]:
                 "cannot be used with this recipe. (The seal itself was identified by AI, so a human should confirm it.)",
                 rule_id="DF-03", method="ai", confidence=0.7, evidence=ev,
             ))
-        if key and approved and not re.search(KNOWN_MARKS[key], approved):
+        if key and key in {"usda organic", "certified vegan", "recyclable", "non-gmo"} and approved and not re.search(KNOWN_MARKS[key], approved):
             findings.append(ctx.finding(
                 "mark_not_approved", "claims", Verdict.LIKELY, f"'{m.name}' is not on the approved claims list",
                 "Every certification mark must be listed in the approved claims field of the content sheet.",
                 rule_id="DF-04", method="ai", confidence=0.6, evidence=ev,
             ))
+    findings += _india_required_marks(ctx, marks)
     return findings
+
+
+def _india_required_marks(ctx: CheckContext, marks: list[Mark]) -> list[Finding]:
+    """Marks a market requires but the images do not show. Absence in an image
+    cannot be verified in code, so these stay LIKELY with low confidence."""
+    found = {_canonical(m) for m in marks}
+    out = []
+    for key, (rule_id, title, why) in INDIA_REQUIRED.items():
+        if not ctx.rules.get(rule_id) or key in found:
+            continue
+        out.append(ctx.finding(
+            f"mark_missing_{key.replace(' ', '_')}", "mandatory", Verdict.LIKELY, title,
+            why + " It was not seen in any panel image. (Judged by AI from the images; please confirm.)",
+            rule_id=rule_id, method="ai", confidence=0.55,
+            evidence=[Evidence(source="computed", text=f"Not seen in: {', '.join(ctx.art.content_panels)}")],
+        ))
+    return out

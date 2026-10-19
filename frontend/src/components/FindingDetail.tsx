@@ -36,6 +36,7 @@ function EvidenceRow({ e, page, stroke }: { e: Evidence; page: PageImage; stroke
         {e.source === "artwork" && e.bbox && (
           <EvidenceCrop {...page} bbox={e.bbox} stroke={stroke} label={`Artwork detail: ${e.text.slice(0, 80)}`} />
         )}
+        {e.note && <p className="text-xs italic text-ink-faint">{e.note}</p>}
       </div>
     </li>
   );

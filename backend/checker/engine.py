@@ -7,8 +7,8 @@ from collections import Counter
 
 from pydantic import BaseModel
 
-from .checks import claims_checks, label_checks, match_checks, nutrition_checks, print_checks
-from .checks.base import CheckContext
+from .checks import claims_checks, fssai_checks, label_checks, match_checks, nutrition_checks, print_checks
+from .checks.base import CheckContext, check_applies
 from .content_sheet import ApprovedSpec
 from .models import Artwork, Finding, Risk, Verdict
 from .rules import RuleSet
@@ -17,6 +17,7 @@ log = logging.getLogger(__name__)
 
 ALL_CHECKS = (
     nutrition_checks.CHECKS + label_checks.CHECKS + claims_checks.CHECKS + match_checks.CHECKS + print_checks.CHECKS
+    + fssai_checks.CHECKS
 )
 VERDICT_ORDER = {Verdict.DEFINITE: 0, Verdict.LIKELY: 1, Verdict.REVIEW: 2, Verdict.PASS: 3}
 RISK_ORDER = {Risk.SAFETY: 0, Risk.LEGAL: 1, Risk.PRODUCTION: 2, Risk.DATA: 3, Risk.BRAND: 4}
@@ -62,6 +63,8 @@ def run_checks(art: Artwork, rules: RuleSet, spec: ApprovedSpec | None) -> Repor
     findings: list[Finding] = []
     errors: list[str] = []
     for check in ALL_CHECKS:
+        if not check_applies(check, rules):
+            continue  # none of the rules this check implements were supplied
         try:
             findings.extend(check(ctx))
         except Exception as exc:  # one broken check must not hide the others' results

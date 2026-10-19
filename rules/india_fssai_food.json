@@ -1,0 +1,99 @@
+{
+  "name": "India FSSAI food labelling (core subset)",
+  "source": "regulation",
+  "market": "India",
+  "note": "Paraphrased from the Food Safety and Standards (Labelling and Display) Regulations, 2020, related FSS regulations and the Legal Metrology (Packaged Commodities) Rules, 2011 for this prototype. Always confirm against the current FSSAI and Legal Metrology text before release.",
+  "rules": [
+    {
+      "id": "FSSAI-LICENSE",
+      "title": "FSSAI logo and licence number",
+      "citation": "FSS (Labelling and Display) Regulations, 2020",
+      "url": "https://www.fssai.gov.in/cms/food-safety-and-standards-regulations.php",
+      "text": "The label must carry the FSSAI logo together with the 14-digit FSSAI licence or registration number of the brand owner or manufacturer."
+    },
+    {
+      "id": "FSSAI-VEG-MARK",
+      "title": "Vegetarian or non-vegetarian symbol",
+      "citation": "FSS (Labelling and Display) Regulations, 2020",
+      "url": "https://www.fssai.gov.in/cms/food-safety-and-standards-regulations.php",
+      "text": "Packaged food must show the vegetarian symbol (green filled circle inside a green square) or the non-vegetarian symbol (brown filled triangle inside a brown square) on the principal display panel, close to the name or brand name of the product."
+    },
+    {
+      "id": "FSSAI-NUTRITION",
+      "title": "Nutritional information per 100 g",
+      "citation": "FSS (Labelling and Display) Regulations, 2020",
+      "url": "https://www.fssai.gov.in/cms/food-safety-and-standards-regulations.php",
+      "text": "Nutritional information must be declared per 100 g or 100 ml (and per serve where a serving is declared): energy (kcal), protein, carbohydrate, total sugars, added sugars, total fat, saturated fat, trans fat, cholesterol and sodium."
+    },
+    {
+      "id": "FSSAI-INGREDIENTS",
+      "title": "List of ingredients",
+      "citation": "FSS (Labelling and Display) Regulations, 2020",
+      "url": "https://www.fssai.gov.in/cms/food-safety-and-standards-regulations.php",
+      "text": "Ingredients must be listed in descending order of their weight at the time of manufacture, each once."
+    },
+    {
+      "id": "FSSAI-ALLERGEN",
+      "title": "Allergen declaration",
+      "citation": "FSS (Labelling and Display) Regulations, 2020",
+      "url": "https://www.fssai.gov.in/cms/food-safety-and-standards-regulations.php",
+      "text": "Ingredients known to cause allergies (cereals containing gluten such as wheat, rye, barley and oats; crustaceans; milk; eggs; fish; peanuts; tree nuts; soybeans; sulphites) must be declared separately, for example as 'Contains: ...'. A 'may contain' statement is only for cross-contact and does not replace this declaration."
+    },
+    {
+      "id": "FSSAI-DATE-MARK",
+      "title": "Date of manufacture or packing, and use by or expiry date",
+      "citation": "FSS (Labelling and Display) Regulations, 2020",
+      "url": "https://www.fssai.gov.in/cms/food-safety-and-standards-regulations.php",
+      "text": "The label must declare the date of manufacture or packing and the 'Use by' or 'Expiry' date. 'Best before' may be given in addition but does not replace the use by or expiry date."
+    },
+    {
+      "id": "FSSAI-MFR-ADDRESS",
+      "title": "Name and complete address of the manufacturer",
+      "citation": "FSS (Labelling and Display) Regulations, 2020",
+      "url": "https://www.fssai.gov.in/cms/food-safety-and-standards-regulations.php",
+      "text": "The label must give the name and complete address of the manufacturer (and of the packer, marketer or importer where different), including the PIN code."
+    },
+    {
+      "id": "FSSAI-LM-MRP",
+      "title": "Maximum retail price",
+      "citation": "Legal Metrology (Packaged Commodities) Rules, 2011",
+      "url": "https://consumeraffairs.nic.in/organisation-and-units/division/legal-metrology",
+      "text": "The retail sale price must be declared as the maximum retail price (MRP) in rupees, inclusive of all taxes."
+    },
+    {
+      "id": "FSSAI-LM-CONSUMER-CARE",
+      "title": "Consumer care details",
+      "citation": "Legal Metrology (Packaged Commodities) Rules, 2011",
+      "url": "https://consumeraffairs.nic.in/organisation-and-units/division/legal-metrology",
+      "text": "The package must give the name, address, telephone number and email address of the person or office to contact for consumer complaints."
+    },
+    {
+      "id": "FSSAI-LM-NET-QTY",
+      "title": "Net quantity on the principal display panel",
+      "citation": "Legal Metrology (Packaged Commodities) Rules, 2011",
+      "url": "https://consumeraffairs.nic.in/organisation-and-units/division/legal-metrology",
+      "text": "The net quantity must be declared in standard metric units (g, kg, ml, l) on the principal display panel."
+    },
+    {
+      "id": "FSSAI-CLAIM-NAS",
+      "title": "'No added sugar' claim",
+      "citation": "FSS (Advertising and Claims) Regulations, 2018",
+      "url": "https://www.fssai.gov.in/cms/food-safety-and-standards-regulations.php",
+      "text": "'No added sugar' may be claimed only when no sugars, and no ingredient containing added sugars such as honey or syrups, have been added to the food."
+    },
+    {
+      "id": "FSSAI-VEGAN",
+      "title": "Vegan claims",
+      "citation": "FSS (Vegan Foods) Regulations, 2022",
+      "url": "https://www.fssai.gov.in/cms/food-safety-and-standards-regulations.php",
+      "text": "A food may be labelled vegan only if no ingredient, additive or processing aid is of animal origin, and it must then carry the FSSAI vegan logo."
+    },
+    {
+      "id": "FSSAI-ORGANIC",
+      "title": "Organic claims",
+      "citation": "FSS (Organic Foods) Regulations, 2017",
+      "url": "https://www.fssai.gov.in/cms/food-safety-and-standards-regulations.php",
+      "text": "Organic food sold in India must be certified under an Indian organic certification system and carry the Jaivik Bharat logo; a foreign organic seal alone does not meet this requirement."
+    }
+  ]
+}

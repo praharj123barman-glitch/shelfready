@@ -1,0 +1,38 @@
+{
+  "name": "Artwork approval core (any market)",
+  "source": "company",
+  "market": "any",
+  "note": "Market-independent prepress and approval practice used when no company rulebook is loaded. Written for this prototype.",
+  "rules": [
+    {
+      "id": "CORE-COPY",
+      "title": "Artwork matches the approved content",
+      "citation": "Artwork approval practice",
+      "text": "Ingredients, allergen and dietary statements, nutrition values, claims, net quantity, barcode and other copy on the artwork must match the approved content sheet exactly."
+    },
+    {
+      "id": "CORE-HIDDEN",
+      "title": "No hidden objects",
+      "citation": "Prepress practice",
+      "text": "Released artwork must not contain text or objects covered by other artwork, because hidden content can reappear at the printer."
+    },
+    {
+      "id": "CORE-FOLDS",
+      "title": "Folds and safe area",
+      "citation": "Prepress practice",
+      "text": "Copy must not cross a fold line and must stay inside the dieline's safe area."
+    },
+    {
+      "id": "CORE-DIELINE",
+      "title": "Dieline marks do not print",
+      "citation": "Prepress practice",
+      "text": "Dieline guide text and marks must be on a non-printing layer."
+    },
+    {
+      "id": "CORE-DATA",
+      "title": "Approved data is consistent",
+      "citation": "Artwork approval practice",
+      "text": "The approved content sheet must be internally consistent and for the same market as the rules applied."
+    }
+  ]
+}

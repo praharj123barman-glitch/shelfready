@@ -6,7 +6,7 @@ import re
 
 from ..models import Finding, TextLine, Verdict
 from ..sections import split_ingredients
-from .base import CheckContext, art_evidence, block_evidence, sheet_evidence
+from .base import CheckContext, uses, art_evidence, block_evidence, sheet_evidence
 
 SUGAR_WORDS = r"\b(honey|sugars?|syrup|molasses|agave|dextrose|sucrose|glucose|fructose|nectar|juice concentrate)\b"
 ANIMAL_WORDS = r"\b(honey|milk|whey|casein|lactose|butter|cream|eggs?|gelatin|beeswax|carmine|shellac|fish|anchov\w*)\b"
@@ -55,6 +55,7 @@ def _claim_lines(ctx: CheckContext, pattern: str) -> list[TextLine]:
     return hits
 
 
+@uses("FDA-101.60-NAS")
 def check_no_added_sugar(ctx: CheckContext) -> list[Finding]:
     claim = _claim_lines(ctx, r"no\s+added\s+sugars?")
     if not claim:
@@ -75,6 +76,7 @@ def check_no_added_sugar(ctx: CheckContext) -> list[Finding]:
     )]
 
 
+@uses("FDA-101.9-ADDED-SUGARS")
 def check_added_sugars_zero(ctx: CheckContext) -> list[Finding]:
     added = ctx.nf.nutrients.get("added_sugars") if ctx.nf else None
     if added is None or added.amount > 0:
@@ -91,6 +93,7 @@ def check_added_sugars_zero(ctx: CheckContext) -> list[Finding]:
     )]
 
 
+@uses("DF-03")
 def check_vegan(ctx: CheckContext) -> list[Finding]:
     claim = _claim_lines(ctx, r"\bvegans?\b")
     approved = (ctx.spec.value("front_back_panel_claims_certifications") or "") if ctx.spec else ""
@@ -126,6 +129,7 @@ def _may_contain(text: str) -> list[str]:
     return [m.strip(" ,.") for m in re.findall(r"may\s+contain\s+([^,]+?)(?=,|\s+or\s+|\.|$)", text, re.I)]
 
 
+@uses("FDCA-403w", "DF-07")
 def check_allergens(ctx: CheckContext) -> list[Finding]:
     ingredients = _ingredients(ctx)
     present = {name: sorted({m.group(0) for i in ingredients for m in re.finditer(rx, i, re.I)})
@@ -176,6 +180,7 @@ def check_allergens(ctx: CheckContext) -> list[Finding]:
     return findings
 
 
+@uses("DF-08")
 def check_gmo_wording(ctx: CheckContext) -> list[Finding]:
     hits = _claim_lines(ctx, r"\bgmo[\s-]*free\b")
     if not hits:
@@ -188,6 +193,7 @@ def check_gmo_wording(ctx: CheckContext) -> list[Finding]:
     )]
 
 
+@uses("DF-09")
 def check_organic(ctx: CheckContext) -> list[Finding]:
     claim = _claim_lines(ctx, r"\b(certified\s+organic|usda\s+organic)\b")
     approved = (ctx.spec.value("front_back_panel_claims_certifications") or "") if ctx.spec else ""
@@ -215,6 +221,7 @@ def check_organic(ctx: CheckContext) -> list[Finding]:
     return findings
 
 
+@uses("DF-05")
 def check_eu_front_of_pack(ctx: CheckContext) -> list[Finding]:
     eu = [ln for ln in ctx.art.copy_lines() if re.fullmatch(r"(saturates|salt|\d+(\.\d+)?kj)", ln.text.strip(), re.I)
           and not (ctx.nf and ln.panel == ctx.nf.panel)]
@@ -246,6 +253,7 @@ CLAIM_VOCAB = {
 }
 
 
+@uses("DF-04")
 def check_claims_approved(ctx: CheckContext) -> list[Finding]:
     if ctx.spec is None:
         return []

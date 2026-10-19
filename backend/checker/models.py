@@ -64,6 +64,7 @@ class Evidence(BaseModel):
     bbox: BBox | None = None
     line_ids: list[str] = Field(default_factory=list)
     cell: str | None = None  # spreadsheet cell, e.g. "B26"
+    note: str | None = None  # how to read this evidence, e.g. why the crop shows something else
 
 
 class Risk(str, Enum):

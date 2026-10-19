@@ -29,6 +29,7 @@ class Rule(BaseModel):
     source_name: str
     citation: str | None = None
     url: str | None = None
+    market: str | None = None  # from the rule pack, e.g. 'United States', 'India', 'any'
 
 
 class RuleSet(BaseModel):
@@ -52,7 +53,7 @@ def load_regulation_pack(path: str | Path) -> RuleSet:
         raise RuleError(f"Rule pack {path.name} is not valid JSON: {exc}") from exc
     return RuleSet(
         rules=[
-            Rule(source="regulation", source_name=data.get("name", path.stem), **r)
+            Rule(source=data.get("source", "regulation"), source_name=data.get("name", path.stem), market=data.get("market"), **r)
             for r in data.get("rules", [])
         ]
     )

@@ -15,7 +15,7 @@ import pymupdf
 from ..artwork import dieline_segments, glyph_boxes, ink_height
 from ..models import BBox, Finding, TextLine, Verdict
 from ..sections import net_quantity_lines
-from .base import CheckContext, art_evidence, computed, fmt
+from .base import CheckContext, uses, art_evidence, computed, fmt
 
 PT_PER_INCH = 72.0
 MIN_O_HEIGHT_IN = 1 / 16  # 21 CFR 101.2(c)
@@ -48,6 +48,7 @@ def _crosses(seg, bb: BBox, tol: float = FOLD_TOLERANCE) -> bool:
     return any(inner.x0 < x0 + (x1 - x0) * t < inner.x1 and inner.y0 < y0 + (y1 - y0) * t < inner.y1 for t in (i / 40 for i in range(41)))
 
 
+@uses("DF-11")
 def check_folds(ctx: CheckContext) -> list[Finding]:
     creases = _segments(ctx, "crease")
     if not creases:
@@ -80,6 +81,7 @@ def _safe_areas(ctx: CheckContext) -> dict[str, BBox]:
     return areas
 
 
+@uses("DF-11")
 def check_safe_area(ctx: CheckContext) -> list[Finding]:
     areas = _safe_areas(ctx)
     if not areas:
@@ -114,6 +116,7 @@ def _mandatory_lines(ctx: CheckContext) -> list[tuple[str, TextLine]]:
     return out
 
 
+@uses("FDA-101.2-TYPE")
 def check_min_type_size(ctx: CheckContext) -> list[Finding]:
     if not ctx.art.path:
         return []
@@ -148,6 +151,7 @@ def check_min_type_size(ctx: CheckContext) -> list[Finding]:
     )]
 
 
+@uses("FDA-101.105-HEIGHT")
 def check_net_quantity_height(ctx: CheckContext) -> list[Finding]:
     front = ctx.art.panels.get("front")
     # best first: a NET WT line on the front panel is the one the law measures

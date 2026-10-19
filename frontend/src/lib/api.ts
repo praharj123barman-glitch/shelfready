@@ -21,9 +21,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const getHealth = () => request<Health>("/api/health");
 
+export type Market = "US" | "India";
+
 export interface ReviewInput {
   useSamples: boolean;
   useAi: boolean;
+  market: Market;
   artwork?: File | null;
   sheet?: File | null;
   rules?: File[];
@@ -33,6 +36,7 @@ export function runReview(input: ReviewInput): Promise<RunResponse> {
   const form = new FormData();
   form.set("use_samples", String(input.useSamples));
   form.set("use_ai", String(input.useAi));
+  form.set("market", input.market);
   if (!input.useSamples) {
     if (input.artwork) form.set("artwork", input.artwork);
     if (input.sheet) form.set("content_sheet", input.sheet);
