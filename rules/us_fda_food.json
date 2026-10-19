@@ -1,0 +1,106 @@
+{
+  "name": "US FDA food labeling (core subset)",
+  "source": "regulation",
+  "market": "United States",
+  "note": "Paraphrased from 21 CFR Part 101 and the FD&C Act for this prototype. Always confirm against the current eCFR text before release.",
+  "rules": [
+    {
+      "id": "FDA-101.3",
+      "title": "Statement of identity on the principal display panel",
+      "citation": "21 CFR 101.3",
+      "url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-B/part-101/subpart-A/section-101.3",
+      "text": "The principal display panel must bear the common or usual name of the food (statement of identity) as one of its principal features."
+    },
+    {
+      "id": "FDA-101.4",
+      "title": "Ingredients in descending order of predominance",
+      "citation": "21 CFR 101.4(a)",
+      "url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-B/part-101/subpart-A/section-101.4",
+      "text": "Ingredients must be listed by common or usual name in descending order of predominance by weight. Each ingredient is listed once."
+    },
+    {
+      "id": "FDA-101.5",
+      "title": "Name and place of business",
+      "citation": "21 CFR 101.5",
+      "url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-B/part-101/subpart-A/section-101.5",
+      "text": "The label must state the name and place of business of the manufacturer, packer or distributor, including street address (unless listed in a current directory), city, state and ZIP code. If the firm is not the manufacturer, the name must be qualified, e.g. 'Manufactured for' or 'Distributed by'."
+    },
+    {
+      "id": "FDA-101.9-SERVING",
+      "title": "Serving size in household measure and metric",
+      "citation": "21 CFR 101.9(b)(7)",
+      "url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-B/part-101/subpart-A/section-101.9",
+      "text": "Serving size must be declared in a common household measure followed by the equivalent metric quantity in parentheses, for example '2/3 cup (55g)'."
+    },
+    {
+      "id": "FDA-101.9-SERVINGS",
+      "title": "Servings per container consistent with net quantity",
+      "citation": "21 CFR 101.9(b)(8)",
+      "url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-B/part-101/subpart-A/section-101.9",
+      "text": "The number of servings per container is the net quantity divided by the serving size, rounded as the regulation describes ('about' may be used when not a whole number)."
+    },
+    {
+      "id": "FDA-101.9-CALORIES",
+      "title": "Calories consistent with the macronutrients",
+      "citation": "21 CFR 101.9(c)(1)(i)",
+      "url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-B/part-101/subpart-A/section-101.9",
+      "text": "Calories may be calculated with the general factors of 4, 4 and 9 calories per gram for protein, total carbohydrate and total fat (or more specific factors). A declared value far from this calculation indicates an error in one of the numbers."
+    },
+    {
+      "id": "FDA-101.9-ROUNDING",
+      "title": "Nutrient rounding increments",
+      "citation": "21 CFR 101.9(c)(1)-(c)(7)",
+      "url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-B/part-101/subpart-A/section-101.9",
+      "text": "Calories: nearest 5 up to 50, nearest 10 above 50. Total, saturated and trans fat: nearest 0.5 g below 5 g, nearest 1 g at 5 g and above. Cholesterol: nearest 5 mg above 5 mg. Sodium and potassium: nearest 5 mg from 5 to 140 mg, nearest 10 mg above 140 mg. Carbohydrate, fiber, sugars and protein: nearest 1 g at 1 g and above."
+    },
+    {
+      "id": "FDA-101.9-DV",
+      "title": "Percent Daily Value calculation",
+      "citation": "21 CFR 101.9(c)(8) and (c)(9)",
+      "url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-B/part-101/subpart-A/section-101.9",
+      "text": "%DV is the nutrient amount divided by its reference daily value (total fat 78 g, saturated fat 20 g, cholesterol 300 mg, sodium 2300 mg, total carbohydrate 275 g, dietary fiber 28 g, added sugars 50 g, protein 50 g, vitamin D 20 mcg, calcium 1300 mg, iron 18 mg, potassium 4700 mg). Macronutrient %DV is a whole number. Vitamin and mineral %DV is rounded to the nearest 2% up to 10%, 5% up to 50%, and 10% above 50%."
+    },
+    {
+      "id": "FDA-101.9-SUBTOTALS",
+      "title": "Nutrient subcomponents cannot exceed their totals",
+      "citation": "21 CFR 101.9(c)(2), (c)(6)",
+      "url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-B/part-101/subpart-A/section-101.9",
+      "text": "Saturated and trans fat are part of total fat; dietary fiber and sugars are part of total carbohydrate; added sugars are part of total sugars. A part larger than its total is impossible."
+    },
+    {
+      "id": "FDA-101.9-ADDED-SUGARS",
+      "title": "Added sugars include honey and sugars added in processing",
+      "citation": "21 CFR 101.9(c)(6)(iii)",
+      "url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-B/part-101/subpart-A/section-101.9",
+      "text": "Added sugars include sugars added during processing, foods packaged as sweeteners such as honey and syrups, and sugars from concentrated fruit or vegetable juice beyond the expected amount. They are declared in grams with %DV."
+    },
+    {
+      "id": "FDA-101.60-NAS",
+      "title": "'No added sugar' claim conditions",
+      "citation": "21 CFR 101.60(c)(2)",
+      "url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-B/part-101/subpart-D/section-101.60",
+      "text": "'No added sugar' or 'without added sugar' may be used only if no amount of sugars, and no ingredient that contains added sugars (such as honey, syrups, jam or concentrated fruit juice), is added during processing or packaging, among other conditions."
+    },
+    {
+      "id": "FDA-101.105-PDP",
+      "title": "Net quantity on the principal display panel",
+      "citation": "21 CFR 101.105(a), (f)",
+      "url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-B/part-101/subpart-G/section-101.105",
+      "text": "The net quantity of contents must appear on the principal display panel, in the bottom 30 percent of the panel, generally parallel to the base of the package."
+    },
+    {
+      "id": "FDA-101.105-UNITS",
+      "title": "Net quantity in both US customary and metric units",
+      "citation": "21 CFR 101.105(j); Fair Packaging and Labeling Act",
+      "url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-B/part-101/subpart-G/section-101.105",
+      "text": "Net weight must be declared in avoirdupois ounces (and pounds where applicable) and in metric units, for example 'NET WT 16.9 OZ (480g)'."
+    },
+    {
+      "id": "FDCA-403w",
+      "title": "Major food allergen declaration",
+      "citation": "FD&C Act section 403(w) (FALCPA, FASTER Act)",
+      "url": "https://www.fda.gov/food/food-labeling-nutrition/food-allergies",
+      "text": "Major food allergens (milk, eggs, fish, crustacean shellfish, tree nuts, peanuts, wheat, soybeans, sesame) must be declared either in the ingredient list using the food source name or in a 'Contains' statement. For tree nuts the specific nut must be named. Advisory 'may contain' statements are voluntary, must be truthful and are not a substitute for declaring an allergen that is an ingredient."
+    }
+  ]
+}

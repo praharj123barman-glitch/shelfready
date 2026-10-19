@@ -1,0 +1,14 @@
+# artwork + source reading
+pymupdf==2.0
+openpyxl==3.1.5
+zxing-cpp==3.1.1
+pillow==13.0.0
+# data contracts + API
+pydantic==2.14.1
+fastapi==0.148.0
+uvicorn==0.54.0
+python-multipart==0.0.32
+# AI layer (rulebook reasoning, visual marks, follow-up chat)
+google-genai==2.31.0
+# tests
+pytest==9.1.1
