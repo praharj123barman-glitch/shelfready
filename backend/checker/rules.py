@@ -2,7 +2,7 @@
 
 A rulebook written as "### <ID> <Title>" sections is parsed exactly. Free-form
 documents with no IDs are handed to the AI rule extractor instead
-(see ai_rules.py), so we never invent rule IDs from a heading guess.
+(see ai/rulebook_reader.py), so we never invent rule IDs from a heading guess.
 """
 
 from __future__ import annotations
@@ -32,11 +32,35 @@ class Rule(BaseModel):
     market: str | None = None  # from the rule pack, e.g. 'United States', 'India', 'any'
 
 
+# The same requirement can come from different rule sources. When the rule a
+# check cites is not loaded, the first loaded equivalent is used instead, so a
+# company rulebook (DF-*) and the market-independent core pack (CORE-*) both
+# work, and India's FSSAI rules take over US ones where the requirement is shared.
+EQUIVALENT_RULES: dict[str, tuple[str, ...]] = {
+    "DF-01": ("CORE-COPY",),
+    "DF-02": ("CORE-COPY",),
+    "DF-04": ("CORE-COPY",),
+    "DF-06": ("CORE-HIDDEN",),
+    "DF-10": ("CORE-DIELINE",),
+    "DF-11": ("CORE-FOLDS",),
+    "DF-03": ("FSSAI-VEGAN",),
+    "FDA-101.4": ("FSSAI-INGREDIENTS",),
+    "FDA-101.60-NAS": ("FSSAI-CLAIM-NAS",),
+    "FDA-101.9-SUBTOTALS": ("CORE-DATA",),
+}
+
+
 class RuleSet(BaseModel):
     rules: list[Rule]
 
     def get(self, rule_id: str) -> Rule | None:
         return next((r for r in self.rules if r.id == rule_id), None)
+
+    def resolve(self, rule_id: str | None) -> str | None:
+        """The loaded rule to cite for `rule_id`: itself, or its first loaded equivalent."""
+        if rule_id is None or self.get(rule_id):
+            return rule_id
+        return next((alt for alt in EQUIVALENT_RULES.get(rule_id, ()) if self.get(alt)), rule_id)
 
     def merged(self, other: "RuleSet") -> "RuleSet":
         ids = {r.id for r in self.rules}

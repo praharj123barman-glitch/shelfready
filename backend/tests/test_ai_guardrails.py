@@ -9,7 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from checker.ai.rule_checker import CitedEvidence, RuleVerdict, to_finding
+from checker.ai.client import default_client
+from checker.ai.evidence import CitedEvidence
+from checker.ai.rule_judge import RuleJudge, RuleVerdict
 from checker.artwork import read_artwork
 from checker.checks.base import CheckContext
 from checker.models import Verdict
@@ -23,6 +25,10 @@ RULE = Rule(id="T-01", title="Test rule", text="Something must be on the pack.",
 def ctx():
     art = read_artwork(ROOT / "samples" / "DancingFish_Granola_Berry_US_Carton.pdf")
     return CheckContext.build(art, RuleSet(rules=[RULE]), None)
+
+
+def to_finding(ctx, rule, answer):
+    return RuleJudge(ctx, default_client()).to_finding(rule, answer)
 
 
 def line_id(ctx, text):

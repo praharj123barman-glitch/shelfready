@@ -10,25 +10,12 @@ from __future__ import annotations
 import re
 
 from ..models import Finding, TextLine, Verdict
-from ..sections import net_quantity_lines, split_ingredients
-from .base import CheckContext, art_evidence, block_evidence, sheet_evidence, uses
-from .claims_checks import _claim_lines, _may_contain
+from ..sections import may_contain_items, net_quantity_lines, split_ingredients
+from ..vocabulary import INDIA_ALLERGENS
+from .registry import check
+from .base import CheckContext, art_evidence, block_evidence, sheet_evidence
 
 CAT = "mandatory"
-# FSSAI allergen groups by source name (cereals containing gluten include oats)
-FSSAI_ALLERGENS = {
-    "cereals containing gluten": r"\b(wheat|rye|barley|oats?|spelt)\b",
-    "tree nuts": r"\b(almonds?|pecans?|walnuts?|brazil nuts?|cashews?|hazelnuts?|pistachios?|macadamias?)\b",
-    "peanuts": r"\bpeanuts?\b",
-    "milk": r"\b(milk|whey|casein|butter|cream)\b",
-    "eggs": r"\beggs?\b",
-    "soybeans": r"\b(soy|soya|soybeans?)\b",
-    "fish": r"\bfish\b",
-    "crustaceans": r"\b(shrimp|prawns?|crab|lobster)\b",
-    "sulphites": r"\bsulph?ites?\b",
-}
-
-
 def _find(ctx: CheckContext, pattern: str, panel: str | None = None) -> list[TextLine]:
     rx = re.compile(pattern, re.I)
     return [ln for ln in ctx.art.copy_lines(panel) if rx.search(ln.text)]
@@ -38,7 +25,7 @@ def _missing(ctx, check, rule, title, why, fix, verdict=Verdict.DEFINITE) -> Fin
     return ctx.finding(check, CAT, verdict, title, why, rule_id=rule, fix=fix)
 
 
-@uses("FSSAI-LICENSE")
+@check("FSSAI-LICENSE")
 def check_licence(ctx: CheckContext) -> list[Finding]:
     hits = [ln for ln in ctx.art.copy_lines() if re.search(r"(?<!\d)\d{14}(?!\d)", ln.text.replace(" ", ""))]
     if hits:
@@ -49,7 +36,7 @@ def check_licence(ctx: CheckContext) -> list[Finding]:
                      "every packaged food sold in India.", "Add the FSSAI logo with 'Lic. No. ' and the 14-digit number.")]
 
 
-@uses("FSSAI-NUTRITION")
+@check("FSSAI-NUTRITION")
 def check_nutrition_per_100g(ctx: CheckContext) -> list[Finding]:
     rx = r"per\s*100\s*(g|gm|ml)\b"
     visible = _find(ctx, rx)
@@ -68,7 +55,7 @@ def check_nutrition_per_100g(ctx: CheckContext) -> list[Finding]:
                         fix="Add a per-100 g nutrition table in the FSSAI format.")]
 
 
-@uses("FSSAI-DATE-MARK")
+@check("FSSAI-DATE-MARK")
 def check_date_marking(ctx: CheckContext) -> list[Finding]:
     out = []
     use_by = _find(ctx, r"\b(use\s*by|expiry|exp\.?\s*date|expires)\b")
@@ -88,7 +75,7 @@ def check_date_marking(ctx: CheckContext) -> list[Finding]:
                                rule_id="FSSAI-DATE-MARK")]
 
 
-@uses("FSSAI-LM-MRP")
+@check("FSSAI-LM-MRP")
 def check_mrp(ctx: CheckContext) -> list[Finding]:
     hits = _find(ctx, r"\b(m\.?\s*r\.?\s*p\.?|maximum\s+retail\s+price)\b")
     if hits:
@@ -99,7 +86,7 @@ def check_mrp(ctx: CheckContext) -> list[Finding]:
                      "Add 'MRP ₹ ___ (incl. of all taxes)'.")]
 
 
-@uses("FSSAI-LM-CONSUMER-CARE")
+@check("FSSAI-LM-CONSUMER-CARE")
 def check_consumer_care(ctx: CheckContext) -> list[Finding]:
     hits = _find(ctx, r"(consumer|customer)\s*care|@[\w-]+\.\w+|\b1800[\s-]?\d{3}|(\+91[\s-]?)?\b[6-9]\d{9}\b")
     if hits:
@@ -110,7 +97,7 @@ def check_consumer_care(ctx: CheckContext) -> list[Finding]:
                      "Add a consumer care block: name, address, phone and email.")]
 
 
-@uses("FSSAI-MFR-ADDRESS")
+@check("FSSAI-MFR-ADDRESS")
 def check_manufacturer_india(ctx: CheckContext) -> list[Finding]:
     anchor = next(iter(_find(ctx, r"\b(produced|manufactured|marketed|packed|imported)\s+(by|for)\b")), None)
     if anchor is None:
@@ -128,7 +115,7 @@ def check_manufacturer_india(ctx: CheckContext) -> list[Finding]:
                         fix="Add the full address with PIN code, and the FSSAI licence number.")]
 
 
-@uses("FSSAI-LM-NET-QTY")
+@check("FSSAI-LM-NET-QTY")
 def check_net_quantity_india(ctx: CheckContext) -> list[Finding]:
     qty = net_quantity_lines(ctx.art)
     if not qty:
@@ -145,11 +132,11 @@ def check_net_quantity_india(ctx: CheckContext) -> list[Finding]:
                         rule_id="FSSAI-LM-NET-QTY", evidence=ev)]
 
 
-@uses("FSSAI-ALLERGEN")
+@check("FSSAI-ALLERGEN")
 def check_allergens_india(ctx: CheckContext) -> list[Finding]:
     ing = ctx.blocks.get("ingredients")
     items = split_ingredients(ing.text) if ing else []
-    present = {k: sorted({m.group(0) for i in items for m in re.finditer(rx, i, re.I)}) for k, rx in FSSAI_ALLERGENS.items()}
+    present = {k: sorted({m.group(0) for i in items for m in re.finditer(rx, i, re.I)}) for k, rx in INDIA_ALLERGENS.items()}
     present = {k: v for k, v in present.items() if v}
     if not present:
         return []
@@ -167,7 +154,7 @@ def check_allergens_india(ctx: CheckContext) -> list[Finding]:
     block = ctx.blocks.get("allergen_information")
     if block:
         ing_text = " ".join(items).lower()
-        stems = [(m, re.sub(r"\s+nuts?$", "", m.lower()).rstrip("s")) for m in _may_contain(block.text)]
+        stems = [(m, re.sub(r"\s+nuts?$", "", m.lower()).rstrip("s")) for m in may_contain_items(block.text)]
         both = [m for m, st in stems if st not in {"", "nut"} and st in ing_text]
         if both:
             out.append(ctx.finding(
@@ -179,9 +166,9 @@ def check_allergens_india(ctx: CheckContext) -> list[Finding]:
     return out
 
 
-@uses("FSSAI-ORGANIC")
+@check("FSSAI-ORGANIC")
 def check_organic_india(ctx: CheckContext) -> list[Finding]:
-    claim = _claim_lines(ctx, r"\b(certified\s+organic|usda\s+organic|organic)\b")
+    claim = ctx.claim_lines(r"\b(certified\s+organic|usda\s+organic|organic)\b")
     approved = (ctx.spec.value("front_back_panel_claims_certifications") or "").lower() if ctx.spec else ""
     if not claim and "organic" not in approved:
         return []
@@ -198,7 +185,7 @@ def check_organic_india(ctx: CheckContext) -> list[Finding]:
     )]
 
 
-@uses("CORE-DATA")
+@check("CORE-DATA")
 def check_market_matches_sheet(ctx: CheckContext) -> list[Finding]:
     if ctx.spec is None:
         return []
@@ -214,9 +201,3 @@ def check_market_matches_sheet(ctx: CheckContext) -> list[Finding]:
         rule_id="CORE-DATA", evidence=[e for e in [sheet_evidence(ctx.spec, "country_of_market")] if e],
     )]
 
-
-CHECKS = [
-    check_licence, check_nutrition_per_100g, check_date_marking, check_mrp, check_consumer_care,
-    check_manufacturer_india, check_net_quantity_india, check_allergens_india, check_organic_india,
-    check_market_matches_sheet,
-]

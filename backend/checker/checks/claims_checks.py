@@ -4,63 +4,18 @@ from __future__ import annotations
 
 import re
 
-from ..models import Finding, TextLine, Verdict
-from ..sections import split_ingredients
-from .base import CheckContext, uses, art_evidence, block_evidence, sheet_evidence
+from ..models import Finding, Verdict
+from ..sections import may_contain_items
+from ..vocabulary import ANIMAL_WORDS, SUGAR_WORDS, US_ALLERGENS
+from .registry import check
+from .base import CheckContext, art_evidence, block_evidence, sheet_evidence
 
-SUGAR_WORDS = r"\b(honey|sugars?|syrup|molasses|agave|dextrose|sucrose|glucose|fructose|nectar|juice concentrate)\b"
-ANIMAL_WORDS = r"\b(honey|milk|whey|casein|lactose|butter|cream|eggs?|gelatin|beeswax|carmine|shellac|fish|anchov\w*)\b"
-# FD&C Act 403(w) major allergens by food source name. Coconut is not listed:
-# FDA no longer treats it as a tree nut (2025 guidance), and "coconut sugar" would misfire.
-ALLERGENS = {
-    "tree nuts": r"\b(almonds?|pecans?|walnuts?|brazil nuts?|cashews?|hazelnuts?|macadamias?|pistachios?|pine nuts?)\b",
-    "peanuts": r"\bpeanuts?\b",
-    "milk": r"\b(milk|whey|casein|butter|cream|lactose)\b",
-    "eggs": r"\beggs?\b",
-    "wheat": r"\bwheat\b",
-    "soybeans": r"\b(soy|soya|soybeans?)\b",
-    "sesame": r"\bsesame\b",
-    "fish": r"\b(fish|anchov\w*|salmon|tuna|cod)\b",
-    "crustacean shellfish": r"\b(shrimp|crab|lobster|prawns?)\b",
-}
-BADGE_MIN_SIZE = 9.0
-
-
-def badge_claims(ctx: CheckContext) -> list[tuple[str, list[TextLine]]]:
-    """Join stacked short uppercase words into badge texts ('NO' 'ADDED' 'SUGAR')."""
-    words = [ln for ln in ctx.art.copy_lines() if ln.size >= BADGE_MIN_SIZE and ln.text.isupper() and len(ln.text) <= 12]
-    clusters: list[list[TextLine]] = []
-    for ln in sorted(words, key=lambda l: (l.panel, l.bbox.cy)):
-        for cl in clusters:
-            last = cl[-1]
-            if last.panel == ln.panel and abs(last.bbox.cx - ln.bbox.cx) < 25 and 0 <= ln.bbox.cy - last.bbox.cy < 1.6 * ln.size:
-                cl.append(ln)
-                break
-        else:
-            clusters.append([ln])
-    return [(" ".join(l.text for l in cl), cl) for cl in clusters if len(cl) >= 2]
-
-
-def _ingredients(ctx: CheckContext) -> list[str]:
-    b = ctx.blocks.get("ingredients")
-    return split_ingredients(b.text) if b else []
-
-
-def _claim_lines(ctx: CheckContext, pattern: str) -> list[TextLine]:
-    rx = re.compile(pattern, re.I)
-    hits = [ln for ln in ctx.art.copy_lines() if rx.search(ln.text)]
-    for text, lines in badge_claims(ctx):
-        if rx.search(text):
-            hits.extend(lines)
-    return hits
-
-
-@uses("FDA-101.60-NAS")
+@check("FDA-101.60-NAS")
 def check_no_added_sugar(ctx: CheckContext) -> list[Finding]:
-    claim = _claim_lines(ctx, r"no\s+added\s+sugars?")
+    claim = ctx.claim_lines(r"no\s+added\s+sugars?")
     if not claim:
         return []
-    sweet = [i for i in _ingredients(ctx) if re.search(SUGAR_WORDS, i, re.I)]
+    sweet = [i for i in ctx.ingredient_items() if re.search(SUGAR_WORDS, i, re.I)]
     if not sweet:
         return [ctx.finding("no_added_sugar", "claims", Verdict.PASS, "'No Added Sugar' is consistent with the ingredients",
                             "No sugar or sweetening ingredient is listed.", rule_id="FDA-101.60-NAS", evidence=[art_evidence(claim)])]
@@ -76,12 +31,12 @@ def check_no_added_sugar(ctx: CheckContext) -> list[Finding]:
     )]
 
 
-@uses("FDA-101.9-ADDED-SUGARS")
+@check("FDA-101.9-ADDED-SUGARS")
 def check_added_sugars_zero(ctx: CheckContext) -> list[Finding]:
     added = ctx.nf.nutrients.get("added_sugars") if ctx.nf else None
     if added is None or added.amount > 0:
         return []
-    sweet = [i for i in _ingredients(ctx) if re.search(SUGAR_WORDS, i, re.I)]
+    sweet = [i for i in ctx.ingredient_items() if re.search(SUGAR_WORDS, i, re.I)]
     if not sweet:
         return []
     return [ctx.finding(
@@ -93,14 +48,14 @@ def check_added_sugars_zero(ctx: CheckContext) -> list[Finding]:
     )]
 
 
-@uses("DF-03")
+@check("DF-03")
 def check_vegan(ctx: CheckContext) -> list[Finding]:
-    claim = _claim_lines(ctx, r"\bvegans?\b")
+    claim = ctx.claim_lines(r"\bvegans?\b")
     approved = (ctx.spec.value("front_back_panel_claims_certifications") or "") if ctx.spec else ""
     if not claim and "vegan" not in approved.lower():
         return []
     findings: list[Finding] = []
-    animal = [i for i in _ingredients(ctx) if re.search(ANIMAL_WORDS, i, re.I)]
+    animal = [i for i in ctx.ingredient_items() if re.search(ANIMAL_WORDS, i, re.I)]
     ev = [art_evidence(claim[:3])] if claim else []
     if animal:
         if b := ctx.blocks.get("ingredients"):
@@ -125,15 +80,11 @@ def check_vegan(ctx: CheckContext) -> list[Finding]:
     return findings
 
 
-def _may_contain(text: str) -> list[str]:
-    return [m.strip(" ,.") for m in re.findall(r"may\s+contain\s+([^,]+?)(?=,|\s+or\s+|\.|$)", text, re.I)]
-
-
-@uses("FDCA-403w", "DF-07")
+@check("FDCA-403w", "DF-07")
 def check_allergens(ctx: CheckContext) -> list[Finding]:
-    ingredients = _ingredients(ctx)
+    ingredients = ctx.ingredient_items()
     present = {name: sorted({m.group(0) for i in ingredients for m in re.finditer(rx, i, re.I)})
-               for name, rx in ALLERGENS.items()}
+               for name, rx in US_ALLERGENS.items()}
     present = {k: v for k, v in present.items() if v}
     block = ctx.blocks.get("allergen_information")
     findings: list[Finding] = []
@@ -149,7 +100,7 @@ def check_allergens(ctx: CheckContext) -> list[Finding]:
     if block is None:
         return findings
 
-    may = _may_contain(block.text)
+    may = may_contain_items(block.text)
     ing_text = " ".join(ingredients).lower()
     # "Pecan Nuts" -> "pecan"; the bare word "Nuts" is handled by the generic-nuts check
     stems = [(m, re.sub(r"\s+nuts?$", "", m.lower()).rstrip("s")) for m in may]
@@ -180,9 +131,9 @@ def check_allergens(ctx: CheckContext) -> list[Finding]:
     return findings
 
 
-@uses("DF-08")
+@check("DF-08")
 def check_gmo_wording(ctx: CheckContext) -> list[Finding]:
-    hits = _claim_lines(ctx, r"\bgmo[\s-]*free\b")
+    hits = ctx.claim_lines(r"\bgmo[\s-]*free\b")
     if not hits:
         return []
     return [ctx.finding(
@@ -193,13 +144,13 @@ def check_gmo_wording(ctx: CheckContext) -> list[Finding]:
     )]
 
 
-@uses("DF-09")
+@check("DF-09")
 def check_organic(ctx: CheckContext) -> list[Finding]:
-    claim = _claim_lines(ctx, r"\b(certified\s+organic|usda\s+organic)\b")
+    claim = ctx.claim_lines(r"\b(certified\s+organic|usda\s+organic)\b")
     approved = (ctx.spec.value("front_back_panel_claims_certifications") or "") if ctx.spec else ""
     if not claim and "organic" not in approved.lower():
         return []
-    items = _ingredients(ctx)
+    items = ctx.ingredient_items()
     organic = [i for i in items if re.search(r"\borganic\b", i, re.I)]
     findings: list[Finding] = []
     ev = [art_evidence(claim[:2])] if claim else []
@@ -211,7 +162,7 @@ def check_organic(ctx: CheckContext) -> list[Finding]:
             "organic content and each organic ingredient identified. Confirm the certificate covers the others.",
             rule_id="DF-09", evidence=ev + ([block_evidence(ctx.blocks['ingredients'])] if 'ingredients' in ctx.blocks else []),
         ))
-    if not _claim_lines(ctx, r"certified\s+organic\s+by"):
+    if not ctx.claim_lines(r"certified\s+organic\s+by"):
         findings.append(ctx.finding(
             "organic_certifier", "claims", Verdict.DEFINITE, "Organic claim without 'Certified organic by ...' statement",
             "Products sold as organic must name their certifying agent below the manufacturer statement "
@@ -221,7 +172,7 @@ def check_organic(ctx: CheckContext) -> list[Finding]:
     return findings
 
 
-@uses("DF-05")
+@check("DF-05")
 def check_eu_front_of_pack(ctx: CheckContext) -> list[Finding]:
     eu = [ln for ln in ctx.art.copy_lines() if re.fullmatch(r"(saturates|salt|\d+(\.\d+)?kj)", ln.text.strip(), re.I)
           and not (ctx.nf and ln.panel == ctx.nf.panel)]
@@ -253,7 +204,7 @@ CLAIM_VOCAB = {
 }
 
 
-@uses("DF-04")
+@check("DF-04")
 def check_claims_approved(ctx: CheckContext) -> list[Finding]:
     if ctx.spec is None:
         return []
@@ -262,7 +213,7 @@ def check_claims_approved(ctx: CheckContext) -> list[Finding]:
         return []
     found = []
     for name, rx in CLAIM_VOCAB.items():
-        if lines := _claim_lines(ctx, rx):
+        if lines := ctx.claim_lines(rx):
             found.append((name, lines))
     unapproved = [(n, l) for n, l in found if not re.search(CLAIM_VOCAB[n], approved)]
     if not unapproved:
@@ -278,14 +229,3 @@ def check_claims_approved(ctx: CheckContext) -> list[Finding]:
         + [e for e in [sheet_evidence(ctx.spec, "front_back_panel_claims_certifications")] if e],
     )]
 
-
-CHECKS = [
-    check_no_added_sugar,
-    check_added_sugars_zero,
-    check_vegan,
-    check_allergens,
-    check_gmo_wording,
-    check_organic,
-    check_eu_front_of_pack,
-    check_claims_approved,
-]

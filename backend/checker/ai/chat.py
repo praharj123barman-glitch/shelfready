@@ -1,18 +1,22 @@
 """Follow-up questions about one finding.
 
-The assistant answers from the finding, its rule, its evidence and the
-artwork text only. Cited line ids are checked; if the answer leans on lines
-that do not exist, the reply says so instead of passing it off as grounded.
+``FindingChat`` answers from the finding, its rule, its evidence and the artwork
+text only. The line ids an answer cites are checked; if it leans on lines that
+do not exist, the reply says so and is marked as needing a human.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
 
 from ..checks.base import CheckContext
 from ..models import Finding
-from .client import generate_json
-from .rule_checker import artwork_digest, sheet_digest
+from .client import GeminiClient
+from .prompt_material import PromptMaterial
+
+HISTORY_TURNS = 6  # earlier turns sent with each question, enough for "and why is that?"
 
 SYSTEM = """You are a calm, precise packaging compliance reviewer answering a colleague's question about one finding.
 Answer only from the FINDING, RULE, ARTWORK TEXT and APPROVED SHEET provided.
@@ -32,22 +36,34 @@ class ChatTurn(BaseModel):
     text: str
 
 
-def answer_question(ctx: CheckContext, finding: Finding, question: str, history: list[ChatTurn] | None = None) -> ChatAnswer:
-    past = "\n".join(f"{t.role}: {t.text}" for t in (history or [])[-6:])
-    prompt = (
-        f"FINDING ({finding.verdict.value}, {finding.method}): {finding.title}\n{finding.explanation}\n"
-        f"Expected: {finding.expected or '-'} | Found: {finding.found or '-'} | Fix: {finding.fix or '-'}\n"
-        f"Evidence: {[e.text for e in finding.evidence]}\nDetails: {finding.details}\n\n"
-        f"RULE {finding.rule_id or '-'}: {finding.rule_text or '-'}\n\n"
-        f"ARTWORK TEXT\n{artwork_digest(ctx)}\n\nAPPROVED SHEET\n{sheet_digest(ctx)}\n\n"
-        + (f"CONVERSATION SO FAR\n{past}\n\n" if past else "")
-        + f"QUESTION: {question}"
-    )
-    # chat replies are not cached: the same question in a new context deserves a fresh answer
-    ans = generate_json(prompt, ChatAnswer, SYSTEM, temperature=0.2, use_cache=False)
-    bad = [i for i in ans.cited_line_ids if ctx.line(i) is None]
-    if bad:
-        ans.cited_line_ids = [i for i in ans.cited_line_ids if i not in bad]
-        ans.answer += f" (Note: this answer referred to artwork lines that do not exist: {', '.join(bad)}. Treat it with care.)"
-        ans.needs_human = True
-    return ans
+@dataclass
+class FindingChat:
+    ctx: CheckContext
+    client: GeminiClient
+
+    def ask(self, finding: Finding, question: str, history: list[ChatTurn] | None = None) -> ChatAnswer:
+        # not cached: the same question in a new conversation deserves a fresh answer
+        answer = self.client.generate_json(self._prompt(finding, question, history or []), ChatAnswer, SYSTEM,
+                                           temperature=0.2, use_cache=False)
+        return self._check_citations(answer)
+
+    def _prompt(self, finding: Finding, question: str, history: list[ChatTurn]) -> str:
+        material = PromptMaterial(self.ctx, self.client)
+        past = "\n".join(f"{t.role}: {t.text}" for t in history[-HISTORY_TURNS:])
+        return (
+            f"FINDING ({finding.verdict.value}, {finding.method}): {finding.title}\n{finding.explanation}\n"
+            f"Expected: {finding.expected or '-'} | Found: {finding.found or '-'} | Fix: {finding.fix or '-'}\n"
+            f"Evidence: {[e.text for e in finding.evidence]}\nDetails: {finding.details}\n\n"
+            f"RULE {finding.rule_id or '-'}: {finding.rule_text or '-'}\n\n"
+            f"ARTWORK TEXT\n{material.text_lines()}\n\nAPPROVED SHEET\n{material.approved_sheet()}\n\n"
+            + (f"CONVERSATION SO FAR\n{past}\n\n" if past else "")
+            + f"QUESTION: {question}"
+        )
+
+    def _check_citations(self, answer: ChatAnswer) -> ChatAnswer:
+        unknown = [i for i in answer.cited_line_ids if self.ctx.line(i) is None]
+        if unknown:
+            answer.cited_line_ids = [i for i in answer.cited_line_ids if i not in unknown]
+            answer.answer += f" (Note: this answer referred to artwork lines that do not exist: {', '.join(unknown)}. Treat it with care.)"
+            answer.needs_human = True
+        return answer

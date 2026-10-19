@@ -65,7 +65,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 3.5
+      "seconds": 3.3
     },
     {
       "id": "D02",
@@ -97,7 +97,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 3.4
+      "seconds": 3.3
     },
     {
       "id": "D04",
@@ -113,7 +113,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 4.1
+      "seconds": 3.5
     },
     {
       "id": "D05",
@@ -161,7 +161,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 3.5
+      "seconds": 3.3
     },
     {
       "id": "D08",
@@ -177,7 +177,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 3.6
+      "seconds": 3.3
     },
     {
       "id": "D09",
@@ -193,7 +193,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 3.7
+      "seconds": 3.4
     },
     {
       "id": "D10",
@@ -209,7 +209,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 5.6
+      "seconds": 3.3
     },
     {
       "id": "D11",
@@ -241,7 +241,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 3.7
+      "seconds": 3.3
     },
     {
       "id": "D13",
@@ -257,7 +257,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 3.4
+      "seconds": 3.3
     },
     {
       "id": "D14",
@@ -273,7 +273,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 3.9
+      "seconds": 3.4
     },
     {
       "id": "D15",
@@ -289,7 +289,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 3.8
+      "seconds": 3.3
     },
     {
       "id": "D16",
@@ -305,7 +305,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 4.6
+      "seconds": 3.3
     },
     {
       "id": "R01",
@@ -333,7 +333,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 3.8
+      "seconds": 3.9
     },
     {
       "id": "R02",
@@ -371,7 +371,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 3.2
+      "seconds": 3.4
     },
     {
       "id": "R04",
@@ -387,7 +387,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 3.2
+      "seconds": 3.3
     },
     {
       "id": "R05",
@@ -403,7 +403,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 3.2
+      "seconds": 3.3
     },
     {
       "id": "R06",
@@ -419,7 +419,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 3.2
+      "seconds": 3.3
     },
     {
       "id": "R07",
@@ -435,7 +435,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 3.2
+      "seconds": 3.4
     }
   ]
 }

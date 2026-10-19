@@ -220,7 +220,7 @@ Tests and eval:
 
 ```bash
 cd backend
-../.venv/Scripts/python -m pytest -q          # 96 tests: math, parsing, guardrails, markets, feedback, compare, robustness, full sample run
+../.venv/Scripts/python -m pytest -q          # 102 tests: math, parsing, guardrails, markets, feedback, compare, API, robustness, full sample run
 ../.venv/Scripts/python -m eval.run_eval      # mutation eval, writes eval/RESULTS.md
 ```
 
@@ -239,9 +239,12 @@ output, so a repeat review takes about 10 seconds.
 
 ## Repository layout
 
+For how the code is organised and how to add a check, a rule pack or a market, see the
+[developer guide](docs/ARCHITECTURE.md).
+
 ```
-backend/checker/        artwork, sheet and rule readers; checks/; ai/; engine and pipeline
-backend/app.py          FastAPI service
+backend/checker/        review logic: pipeline, artwork/ (PDF), sheet and rule readers, checks/, ai/, feedback, compare
+backend/app.py          FastAPI endpoints (shapes in api_models.py, stored runs in runs.py)
 backend/eval/           mutation eval and results
 backend/tests/          pytest suite
 frontend/src/           Next.js app (components/, lib/)

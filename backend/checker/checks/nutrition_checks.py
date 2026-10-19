@@ -7,7 +7,8 @@ import re
 from ..models import Evidence, Finding, Verdict
 from ..nutrition import DAILY_VALUES, NUTRIENT_NAMES, atwater_calories, expected_dv, expected_rounding
 from ..sections import net_quantity_lines
-from .base import CheckContext, uses, art_evidence, computed, fmt
+from .registry import check
+from .base import CheckContext, art_evidence, computed, fmt
 
 CAT = "nutrition"
 # nutrients where FDA requires a %DV next to the amount (protein only with a claim)
@@ -17,7 +18,7 @@ HOUSEHOLD_UNITS = r"\b(cups?|tbsp|tablespoons?|tsp|teaspoons?|pieces?|bars?|slic
 ATWATER_TOLERANCE = 0.20
 
 
-@uses("FDA-101.9-DV")
+@check("FDA-101.9-DV")
 def check_panel_present(ctx: CheckContext) -> list[Finding]:
     if ctx.nf is None:
         return [
@@ -38,7 +39,7 @@ def check_panel_present(ctx: CheckContext) -> list[Finding]:
     ]
 
 
-@uses("FDA-101.9-SERVING")
+@check("FDA-101.9-SERVING")
 def check_serving_size(ctx: CheckContext) -> list[Finding]:
     nf = ctx.nf
     if nf is None:
@@ -73,7 +74,7 @@ def _net_grams(ctx: CheckContext) -> float | None:
     return None
 
 
-@uses("FDA-101.9-SERVINGS")
+@check("FDA-101.9-SERVINGS")
 def check_servings_math(ctx: CheckContext) -> list[Finding]:
     nf = ctx.nf
     if nf is None or nf.servings_per_container is None:
@@ -108,7 +109,7 @@ def check_servings_math(ctx: CheckContext) -> list[Finding]:
     ]
 
 
-@uses("FDA-101.9-CALORIES")
+@check("FDA-101.9-CALORIES")
 def check_calories(ctx: CheckContext) -> list[Finding]:
     nf = ctx.nf
     n = nf.nutrients if nf else {}
@@ -133,7 +134,7 @@ def check_calories(ctx: CheckContext) -> list[Finding]:
     ]
 
 
-@uses("FDA-101.9-ROUNDING")
+@check("FDA-101.9-ROUNDING")
 def check_rounding(ctx: CheckContext) -> list[Finding]:
     nf = ctx.nf
     if nf is None:
@@ -162,7 +163,7 @@ def check_rounding(ctx: CheckContext) -> list[Finding]:
     ]
 
 
-@uses("FDA-101.9-DV")
+@check("FDA-101.9-DV")
 def check_daily_values(ctx: CheckContext) -> list[Finding]:
     nf = ctx.nf
     if nf is None:
@@ -203,7 +204,7 @@ def check_daily_values(ctx: CheckContext) -> list[Finding]:
     return findings
 
 
-@uses("FDA-101.9-SUBTOTALS")
+@check("FDA-101.9-SUBTOTALS")
 def check_subtotals(ctx: CheckContext) -> list[Finding]:
     nf = ctx.nf
     if nf is None:
@@ -235,7 +236,7 @@ def check_subtotals(ctx: CheckContext) -> list[Finding]:
     return out
 
 
-@uses("DF-02")
+@check("DF-02")
 def check_against_sheet(ctx: CheckContext) -> list[Finding]:
     """DF-02: every Nutrition Facts amount must equal the approved per serving value."""
     if ctx.nf is None or ctx.spec is None or not ctx.spec.nutrition:
@@ -271,14 +272,3 @@ def check_against_sheet(ctx: CheckContext) -> list[Finding]:
         )
     ]
 
-
-CHECKS = [
-    check_panel_present,
-    check_serving_size,
-    check_servings_math,
-    check_calories,
-    check_rounding,
-    check_daily_values,
-    check_subtotals,
-    check_against_sheet,
-]

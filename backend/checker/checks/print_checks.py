@@ -7,16 +7,14 @@ or measurement, so verdicts are DEFINITE or LIKELY with the numbers shown.
 
 from __future__ import annotations
 
-import functools
 import statistics
-from pathlib import Path
 
-import pymupdf
-
-from ..artwork import _stamp, dieline_segments, glyph_boxes, ink_height
+from ..artwork import PdfFile, glyph_boxes, ink_height
+from ..artwork.pdf_file import Segment
 from ..models import BBox, Finding, TextLine, Verdict
 from ..sections import net_quantity_lines
-from .base import CheckContext, uses, art_evidence, computed, fmt
+from .registry import check
+from .base import CheckContext, art_evidence, computed, fmt
 
 PT_PER_INCH = 72.0
 MIN_O_HEIGHT_IN = 1 / 16  # 21 CFR 101.2(c)
@@ -26,14 +24,9 @@ FOLD_TOLERANCE = 1.0  # pt: a line must enter the text box by more than this to 
 NET_QTY_HEIGHTS = [(5, 1 / 16), (25, 1 / 8), (100, 3 / 16), (400, 1 / 4), (float("inf"), 1 / 2)]
 
 
-@functools.lru_cache(maxsize=16)
-def _segments_for(path: str, layer: str, stamp: tuple[int, int]) -> tuple:
-    return tuple(dieline_segments(pymupdf.open(path)[0], layer))
-
-
-def _segments(ctx: CheckContext, layer: str):
-    # keyed on the file version too, so a rewritten file is not answered from cache
-    return _segments_for(ctx.art.path, layer, _stamp(Path(ctx.art.path))) if ctx.art.path else ()
+def _segments(ctx: CheckContext, layer: str) -> list[Segment]:
+    """Dieline lines on layers named like `layer` ('crease', 'cut'); PdfFile caches them per file version."""
+    return PdfFile.open(ctx.art.path).dieline_segments(layer) if ctx.art.path else []
 
 
 def _crosses(seg, bb: BBox, tol: float = FOLD_TOLERANCE) -> bool:
@@ -50,7 +43,7 @@ def _crosses(seg, bb: BBox, tol: float = FOLD_TOLERANCE) -> bool:
     return any(inner.x0 < x0 + (x1 - x0) * t < inner.x1 and inner.y0 < y0 + (y1 - y0) * t < inner.y1 for t in (i / 40 for i in range(41)))
 
 
-@uses("DF-11")
+@check("DF-11")
 def check_folds(ctx: CheckContext) -> list[Finding]:
     creases = _segments(ctx, "crease")
     if not creases:
@@ -83,7 +76,7 @@ def _safe_areas(ctx: CheckContext) -> dict[str, BBox]:
     return areas
 
 
-@uses("DF-11")
+@check("DF-11")
 def check_safe_area(ctx: CheckContext) -> list[Finding]:
     areas = _safe_areas(ctx)
     if not areas:
@@ -118,7 +111,7 @@ def _mandatory_lines(ctx: CheckContext) -> list[tuple[str, TextLine]]:
     return out
 
 
-@uses("FDA-101.2-TYPE")
+@check("FDA-101.2-TYPE")
 def check_min_type_size(ctx: CheckContext) -> list[Finding]:
     if not ctx.art.path:
         return []
@@ -153,7 +146,7 @@ def check_min_type_size(ctx: CheckContext) -> list[Finding]:
     )]
 
 
-@uses("FDA-101.105-HEIGHT")
+@check("FDA-101.105-HEIGHT")
 def check_net_quantity_height(ctx: CheckContext) -> list[Finding]:
     front = ctx.art.panels.get("front")
     # best first: a NET WT line on the front panel is the one the law measures
@@ -182,5 +175,3 @@ def check_net_quantity_height(ctx: CheckContext) -> list[Finding]:
         fix=f"Set the net quantity at least {need_in * 25.4:.1f} mm tall on the front panel.",
     )]
 
-
-CHECKS = [check_folds, check_safe_area, check_min_type_size, check_net_quantity_height]

@@ -127,6 +127,29 @@ def net_quantity_lines(art: Artwork) -> list[TextLine]:
     return sorted(out, key=lambda l: ("net" not in l.text.lower(), l.panel != "front"))
 
 
+BADGE_MIN_SIZE = 9.0  # pt: badge words are set large
+
+
+def badge_texts(art: Artwork) -> list[tuple[str, list[TextLine]]]:
+    """Stacked short uppercase words read as one badge: 'NO' 'ADDED' 'SUGAR' -> 'NO ADDED SUGAR'."""
+    words = [ln for ln in art.copy_lines() if ln.size >= BADGE_MIN_SIZE and ln.text.isupper() and len(ln.text) <= 12]
+    clusters: list[list[TextLine]] = []
+    for ln in sorted(words, key=lambda l: (l.panel, l.bbox.cy)):
+        for cluster in clusters:
+            last = cluster[-1]
+            if last.panel == ln.panel and abs(last.bbox.cx - ln.bbox.cx) < 25 and 0 <= ln.bbox.cy - last.bbox.cy < 1.6 * ln.size:
+                cluster.append(ln)
+                break
+        else:
+            clusters.append([ln])
+    return [(" ".join(l.text for l in cluster), cluster) for cluster in clusters if len(cluster) >= 2]
+
+
+def may_contain_items(text: str) -> list[str]:
+    """'May contain almonds, may contain brazil nuts' -> ['almonds', 'brazil nuts']."""
+    return [m.strip(" ,.") for m in re.findall(r"may\s+contain\s+([^,]+?)(?=,|\s+or\s+|\.|$)", text, re.I)]
+
+
 def split_ingredients(text: str) -> list[str]:
     """Split an ingredient statement on top-level commas (not inside brackets)."""
     body = re.sub(r"^\s*ingredients\s*:\s*", "", text, flags=re.I).strip().rstrip(".")

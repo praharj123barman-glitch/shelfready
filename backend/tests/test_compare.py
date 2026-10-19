@@ -6,7 +6,8 @@ import pytest
 
 from checker.artwork import read_artwork
 from checker.compare import compare
-from checker.pipeline import review
+from checker.feedback import FeedbackStore
+from checker.pipeline import ReviewPipeline
 
 ROOT = Path(__file__).resolve().parents[2]
 S, R = ROOT / "samples", ROOT / "rules"
@@ -17,10 +18,10 @@ SHEET = S / "DancingFish_Granola_BerryCrunch_US_Content_Sheet.xlsx"
 
 @pytest.fixture(scope="module")
 def comparison(tmp_path_factory):
-    store = tmp_path_factory.mktemp("fb") / "feedback.json"
+    pipeline = ReviewPipeline(feedback=FeedbackStore(tmp_path_factory.mktemp("fb") / "feedback.json"))
     rules = [R / "us_fda_food.json", R / "dancing_fish_company_rulebook.md"]
-    a = review(V1, SHEET, rules, use_ai=False, feedback_store=store).report
-    b = review(V2, SHEET, rules, use_ai=False, feedback_store=store).report
+    a = pipeline.run(V1, SHEET, rules, use_ai=False).report
+    b = pipeline.run(V2, SHEET, rules, use_ai=False).report
     return compare(read_artwork(V1), read_artwork(V2), a.findings, b.findings)
 
 

@@ -6,9 +6,15 @@ import pymupdf
 import pytest
 
 from checker.artwork import ArtworkError, read_artwork
-from checker.pipeline import review
+from checker.feedback import FeedbackStore
+from checker.pipeline import ReviewPipeline
 
 ROOT = Path(__file__).resolve().parents[2]
+FDA = [ROOT / "rules" / "us_fda_food.json"]
+
+
+def review(pdf: Path, tmp_path: Path):
+    return ReviewPipeline(feedback=FeedbackStore(tmp_path / "fb.json")).run(pdf, None, FDA, use_ai=False)
 
 
 def flat_label(path: Path, pages: int = 1) -> Path:
@@ -30,8 +36,7 @@ def flat_label(path: Path, pages: int = 1) -> Path:
 def test_label_without_dieline_is_its_own_front_panel(tmp_path):
     art = read_artwork(flat_label(tmp_path / "label.pdf"))
     assert list(art.panels) == ["front"]
-    report = review(art_path := tmp_path / "label.pdf", None, [ROOT / "rules" / "us_fda_food.json"], use_ai=False,
-                    feedback_store=tmp_path / "fb.json").report
+    report = review(art_path := tmp_path / "label.pdf", tmp_path).report
     checks = {f.check: f.verdict.value for f in report.findings}
     assert checks.get("identity") == "pass"  # was a false alarm: "missing from the front panel"
     assert "net_quantity_pdp" not in checks  # the declaration is on the only panel there is
@@ -39,14 +44,12 @@ def test_label_without_dieline_is_its_own_front_panel(tmp_path):
 
 
 def test_extra_pages_are_reported_not_skipped_silently(tmp_path):
-    result = review(flat_label(tmp_path / "two.pdf", pages=2), None, [ROOT / "rules" / "us_fda_food.json"],
-                    use_ai=False, feedback_store=tmp_path / "fb.json")
+    result = review(flat_label(tmp_path / "two.pdf", pages=2), tmp_path)
     assert "page 1 of 2" in (result.ai_note or "")
 
 
 def test_missing_serving_size_is_named_plainly(tmp_path):
-    report = review(flat_label(tmp_path / "label.pdf"), None, [ROOT / "rules" / "us_fda_food.json"], use_ai=False,
-                    feedback_store=tmp_path / "fb.json").report
+    report = review(flat_label(tmp_path / "label.pdf"), tmp_path).report
     assert any(f.title == "No serving size declared" for f in report.findings)
 
 
