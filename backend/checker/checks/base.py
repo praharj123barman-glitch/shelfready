@@ -29,8 +29,8 @@ class CheckContext:
     _ids: count = field(default_factory=lambda: count(1))
 
     @classmethod
-    def build(cls, art: Artwork, rules: RuleSet, spec: ApprovedSpec | None) -> "CheckContext":
-        return cls(art=art, rules=rules, spec=spec, blocks=find_blocks(art), nf=read_nutrition_panel(art))
+    def build(cls, art: Artwork, rules: RuleSet, spec: ApprovedSpec | None, first_id: int = 1) -> "CheckContext":
+        return cls(art=art, rules=rules, spec=spec, blocks=find_blocks(art), nf=read_nutrition_panel(art), _ids=count(first_id))
 
     def line(self, line_id: str | None) -> TextLine | None:
         return next((ln for ln in self.art.lines if ln.id == line_id), None) if line_id else None

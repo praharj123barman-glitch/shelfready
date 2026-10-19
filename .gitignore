@@ -1,10 +1,10 @@
+*.log
+*.pyc
 .env
+.next/
+.pytest_cache/
 .venv/
 __pycache__/
-*.pyc
-.pytest_cache/
-node_modules/
-.next/
-frontend/out/
 backend/runs/
-*.log
+frontend/out/
+node_modules/

@@ -87,6 +87,7 @@ class Finding(BaseModel):
 
 class Artwork(BaseModel):
     file_name: str
+    path: str | None = None  # local file, used to render panel images for the AI
     width: float
     height: float
     panels: dict[str, BBox]

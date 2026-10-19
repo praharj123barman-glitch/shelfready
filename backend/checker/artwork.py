@@ -307,6 +307,7 @@ def read_artwork(pdf_path: str | Path, page_no: int = 0) -> Artwork:
 
     return Artwork(
         file_name=pdf_path.name,
+        path=str(pdf_path),
         width=page.rect.width,
         height=page.rect.height,
         panels=panels,
@@ -327,6 +328,11 @@ def read_barcodes(page: pymupdf.Page, panels: dict[str, BBox], dpi: int = 300) -
         bb = BBox(x0=min(xs) * scale, y0=min(ys) * scale, x1=max(xs) * scale, y1=max(ys) * scale)
         found.append({"format": str(r.format).split(".")[-1], "text": r.text, "bbox": bb.model_dump(), "panel": _panel_for(bb, panels)})
     return found
+
+
+def render_panel_png(pdf_path: str | Path, bbox: BBox, dpi: int = 110, page_no: int = 0) -> bytes:
+    page = pymupdf.open(pdf_path)[page_no]
+    return page.get_pixmap(dpi=dpi, clip=pymupdf.Rect(bbox.x0, bbox.y0, bbox.x1, bbox.y1)).tobytes("png")
 
 
 def render_png(pdf_path: str | Path, out_path: str | Path, dpi: int = 110, page_no: int = 0) -> tuple[int, int]:

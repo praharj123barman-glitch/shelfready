@@ -39,15 +39,25 @@ def run_checks(art: Artwork, rules: RuleSet, spec: ApprovedSpec | None) -> Repor
         except Exception as exc:  # one broken check must not hide the others' results
             log.exception("check %s failed", check.__name__)
             errors.append(f"{check.__name__}: {exc}")
-    findings.sort(key=lambda f: (VERDICT_ORDER[f.verdict], f.category))
-    summary = Counter(f.verdict.value for f in findings)
-    return Report(
+    base = Report(
         artwork=art.file_name,
         content_sheet=spec.file_name if spec else None,
         rule_sources=sorted({r.source_name for r in rules.rules}),
-        findings=findings,
-        summary={v.value: summary.get(v.value, 0) for v in Verdict},
-        # an errored check means we did not look, which is not the same as a pass
-        ready_to_launch=summary.get("definite", 0) == 0 and summary.get("likely", 0) == 0 and not errors,
+        findings=[],
+        summary={},
+        ready_to_launch=False,
         check_errors=errors,
     )
+    return finalize(base, findings)
+
+
+def finalize(report: Report, findings: list[Finding]) -> Report:
+    """Sort findings worst first and recompute the summary and launch verdict."""
+    findings = sorted(findings, key=lambda f: (VERDICT_ORDER[f.verdict], f.category))
+    counts = Counter(f.verdict.value for f in findings)
+    return report.model_copy(update={
+        "findings": findings,
+        "summary": {v.value: counts.get(v.value, 0) for v in Verdict},
+        # an errored check means we did not look, which is not the same as a pass
+        "ready_to_launch": counts.get("definite", 0) == 0 and counts.get("likely", 0) == 0 and not report.check_errors,
+    })
