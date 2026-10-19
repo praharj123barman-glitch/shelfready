@@ -1,22 +1,27 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, Info, OctagonX, ShieldCheck } from "lucide-react";
+import { ArrowLeft, GitCompare, Info, OctagonX, ShieldCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Finding, RunResponse, Verdict } from "@/lib/types";
 import { RISKS, RISK_ORDER } from "@/lib/verdicts";
+import type { CompareInput } from "@/lib/api";
 import { ArtworkViewer } from "./ArtworkViewer";
+import { ChangesView } from "./ChangesView";
 import { CoverageTable } from "./CoverageTable";
 import { FindingDetail } from "./FindingDetail";
 import { FindingsList } from "./FindingsList";
 
-export function ResultsScreen({ run, onBack }: { run: RunResponse; onBack: () => void }) {
+export function ResultsScreen({ run, onBack, onCompare, error }: {
+  run: RunResponse; onBack: () => void; onCompare: (input: CompareInput) => void; error: string | null;
+}) {
   const { report, ai_ran, ai_note, ai_models, coverage, rule_sources } = run.result;
   const firstIssue = report.findings.find((f) => f.verdict !== "pass") ?? report.findings[0] ?? null;
   const [selected, setSelected] = useState<Finding | null>(firstIssue);
   const [filter, setFilter] = useState<Verdict | "issues" | "all">("issues");
   const [method, setMethod] = useState<"all" | "deterministic" | "ai">("all");
-  const [tab, setTab] = useState<"findings" | "coverage">("findings");
+  const [tab, setTab] = useState<"findings" | "coverage" | "changes">(run.comparison ? "changes" : "findings");
+  const [comparing, setComparing] = useState(false);
   const s = report.summary;
 
   const headline = useMemo(() => {
@@ -67,14 +72,37 @@ export function ResultsScreen({ run, onBack }: { run: RunResponse; onBack: () =>
             {[ai_note, ...report.check_errors.map((e) => `Check error: ${e}`)].filter(Boolean).join(" · ")}
           </p>
         )}
-        <nav className="flex gap-1 px-5" aria-label="Result views">
-          {(["findings", "coverage"] as const).map((t) => (
-            <button key={t} type="button" onClick={() => setTab(t)} aria-current={tab === t}
+        <nav className="flex flex-wrap items-center gap-1 px-5" aria-label="Result views">
+          {([...(run.comparison ? ["changes"] : []), "findings", "coverage"] as const).map((t) => (
+            <button key={t} type="button" onClick={() => setTab(t as typeof tab)} aria-current={tab === t}
               className={`cursor-pointer border-b-2 px-3 py-2 text-sm font-medium ${tab === t ? "border-primary text-primary" : "border-transparent text-ink-muted hover:text-ink"}`}>
-              {t === "findings" ? "Findings" : "Rule coverage"}
+              {t === "findings" ? "Findings" : t === "coverage" ? "Rule coverage" : "Changes since previous proof"}
             </button>
           ))}
+          <div className="ml-auto flex items-center gap-2 py-1">
+            {comparing ? (
+              <>
+                <label className="cursor-pointer rounded-md border border-line px-2.5 py-1 text-sm text-ink-muted hover:border-primary hover:text-primary">
+                  Upload new proof (PDF)
+                  <input type="file" accept=".pdf" className="sr-only"
+                    onChange={(e) => e.target.files?.[0] && onCompare({ useAi: run.result.ai_ran, useSampleV2: false, artwork: e.target.files[0] })} />
+                </label>
+                <button type="button" onClick={() => onCompare({ useAi: run.result.ai_ran, useSampleV2: true })}
+                  className="cursor-pointer rounded-md border border-line px-2.5 py-1 text-sm text-ink-muted hover:border-primary hover:text-primary"
+                  title="A second proof generated from the sample: 3 fixes and 1 regression">
+                  Use generated v2 (demo)
+                </button>
+                <button type="button" onClick={() => setComparing(false)} className="cursor-pointer px-1 text-sm text-ink-faint hover:text-ink">Cancel</button>
+              </>
+            ) : (
+              <button type="button" onClick={() => setComparing(true)}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-sm font-medium hover:border-primary hover:text-primary">
+                <GitCompare className="size-4" aria-hidden /> Compare a new proof
+              </button>
+            )}
+          </div>
         </nav>
+        {error && <p role="alert" className="border-t border-definite-line bg-definite-soft px-5 py-1.5 text-sm text-definite">{error}</p>}
       </header>
 
       {tab === "findings" ? (
@@ -98,9 +126,13 @@ export function ResultsScreen({ run, onBack }: { run: RunResponse; onBack: () =>
             />
           </div>
         </main>
-      ) : (
+      ) : tab === "coverage" ? (
         <main className="min-h-0 flex-1 p-3">
           <CoverageTable rows={coverage} sources={rule_sources} />
+        </main>
+      ) : (
+        <main className="min-h-0 flex-1 p-3">
+          {run.comparison && <ChangesView run={run} comparison={run.comparison} />}
         </main>
       )}
     </div>

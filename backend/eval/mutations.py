@@ -52,10 +52,13 @@ def _find_line(page: pymupdf.Page, text: str) -> dict:
 
 
 def _remove(page: pymupdf.Page, line: dict) -> None:
-    """Redact only the middle band of the line box so neighbouring lines survive;
-    fill=False keeps the artwork underneath untouched."""
+    """Redact a thin band just above the baseline (the body of the letters), not the
+    whole line box: a tall line box can contain smaller text above it ('Amount per
+    serving' inside the 'Calories 166' box). fill=False keeps the artwork untouched."""
     r = pymupdf.Rect(line["bbox"])
-    page.add_redact_annot(pymupdf.Rect(r.x0, r.y0 + r.height * 0.3, r.x1, r.y1 - r.height * 0.3), fill=False)
+    span = line["spans"][0]
+    base, size = span["origin"][1], span["size"]
+    page.add_redact_annot(pymupdf.Rect(r.x0, base - 0.55 * size, r.x1, base - 0.15 * size), fill=False)
     page.apply_redactions(
         images=pymupdf.PDF_REDACT_IMAGE_NONE, graphics=pymupdf.PDF_REDACT_LINE_ART_NONE, text=pymupdf.PDF_REDACT_TEXT_REMOVE
     )

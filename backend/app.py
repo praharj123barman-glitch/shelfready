@@ -22,6 +22,7 @@ from checker.ai.chat import ChatAnswer, ChatTurn, answer_question
 from checker.ai.client import AIError, ai_available, model_name
 from checker.artwork import ArtworkError, read_artwork, render_png
 from checker.checks.base import CheckContext
+from checker.compare import Comparison, compare
 from checker.content_sheet import SheetError, read_content_sheet
 from checker.feedback import FeedbackStore, record, remove_waiver
 from checker.feedback import load as load_feedback
@@ -34,6 +35,7 @@ RUNS = Path(__file__).resolve().parent / "runs"
 SAMPLES = ROOT / "samples"
 RULES = ROOT / "rules"
 MAX_UPLOAD_MB = 25
+SAMPLE_V2 = "DancingFish_Granola_Berry_US_Carton_v2_GENERATED.pdf"  # demo second proof, see eval/make_v2_proof.py
 RENDER_DPI = 200  # crops in the UI magnify 6pt text, so the page image needs real resolution
 ALLOWED = {"artwork": {".pdf"}, "sheet": {".xlsx"}, "rules": {".json", ".md", ".txt"}}
 
@@ -60,6 +62,8 @@ class RunResponse(BaseModel):
     page_height: float
     image_scale: float = Field(description="image pixels per PDF point, for drawing evidence boxes")
     result: ReviewResult
+    comparison: Comparison | None = None  # set when this run is a new proof compared with an earlier run
+    previous_image_url: str | None = None
 
 
 class ChatRequest(BaseModel):
@@ -159,16 +163,59 @@ async def create_review(
         shutil.rmtree(folder, ignore_errors=True)
         raise HTTPException(422, str(exc)) from exc
 
+    return _save_run(run_id, folder, art_path, sheet_path, rule_paths, result)
+
+
+def _save_run(run_id, folder, art_path, sheet_path, rule_paths, result, comparison=None, previous=None) -> RunResponse:
+    """Persist a finished review (inputs, result, rendered page) and build the response."""
     width, _ = render_png(art_path, folder / "artwork.png", dpi=RENDER_DPI)
     art = read_artwork(art_path)
     (folder / "result.json").write_text(result.model_dump_json(), encoding="utf-8")
     (folder / "inputs.json").write_text(json.dumps({
-        "artwork": art_path.name, "sheet": sheet_path.name if sheet_path else None, "rules": [p.name for p in rule_paths]
+        "artwork": art_path.name, "sheet": sheet_path.name if sheet_path else None,
+        "rules": [p.name for p in rule_paths], "previous_run": previous,
     }), encoding="utf-8")
     return RunResponse(
         run_id=run_id, image_url=f"/api/runs/{run_id}/artwork.png", page_width=art.width, page_height=art.height,
-        image_scale=width / art.width, result=result,
+        image_scale=width / art.width, result=result, comparison=comparison,
+        previous_image_url=f"/api/runs/{previous}/artwork.png" if previous else None,
     )
+
+
+@app.post("/api/runs/{run_id}/compare", response_model=RunResponse)
+async def compare_proof(
+    run_id: str,
+    use_ai: bool = Form(True),
+    use_sample_v2: bool = Form(False),
+    artwork: UploadFile | None = File(None),
+) -> RunResponse:
+    """Review a new proof with the previous run's content sheet and rules, and
+    report what changed and which issues it resolved or introduced."""
+    prev = _run_dir(run_id)
+    inputs = json.loads((prev / "inputs.json").read_text(encoding="utf-8"))
+    new_id = uuid.uuid4().hex[:12]
+    folder = RUNS / new_id
+    folder.mkdir(parents=True)
+    try:
+        if use_sample_v2:
+            art_path = Path(shutil.copy(SAMPLES / SAMPLE_V2, folder))
+        elif artwork is not None:
+            art_path = await _save(artwork, "artwork", folder)
+        else:
+            raise HTTPException(400, "Upload the new proof (PDF), or choose the generated sample v2")
+        sheet_path = Path(shutil.copy(prev / inputs["sheet"], folder)) if inputs["sheet"] else None
+        rule_paths = [Path(shutil.copy(prev / r, folder)) for r in inputs["rules"]]
+        result = review(art_path, sheet_path, rule_paths, use_ai=use_ai)
+        before = ReviewResult.model_validate_json((prev / "result.json").read_text(encoding="utf-8"))
+        comparison = compare(read_artwork(prev / inputs["artwork"]), read_artwork(art_path),
+                             before.report.findings, result.report.findings)
+    except HTTPException:
+        shutil.rmtree(folder, ignore_errors=True)
+        raise
+    except (ArtworkError, SheetError, RuleError) as exc:
+        shutil.rmtree(folder, ignore_errors=True)
+        raise HTTPException(422, str(exc)) from exc
+    return _save_run(new_id, folder, art_path, sheet_path, rule_paths, result, comparison=comparison, previous=run_id)
 
 
 @app.get("/api/runs/{run_id}/artwork.png")

@@ -117,6 +117,34 @@ export interface RunResponse {
   page_height: number;
   image_scale: number;
   result: ReviewResult;
+  comparison: Comparison | null;
+  previous_image_url: string | null;
+}
+
+export interface TextChange {
+  kind: "added" | "removed" | "changed" | "moved";
+  panel: string;
+  before: string | null;
+  after: string | null;
+  before_bbox: BBox | null;
+  after_bbox: BBox | null;
+}
+
+export interface IssueChange {
+  status: "resolved" | "introduced" | "still_open";
+  check: string;
+  title: string;
+  verdict: string;
+  rule_id: string | null;
+  method: "deterministic" | "ai";
+}
+
+export interface Comparison {
+  before: string;
+  after: string;
+  text_changes: TextChange[];
+  issues: IssueChange[];
+  summary: Record<"changed" | "added" | "removed" | "moved" | "resolved" | "introduced" | "still_open" | "ai_changes", number>;
 }
 
 export interface ChatTurn {

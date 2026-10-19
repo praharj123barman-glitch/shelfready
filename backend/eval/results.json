@@ -8,13 +8,12 @@
   "baseline": {
     "may_contain_ingredient": "definite",
     "generic_nuts": "definite",
+    "ingredients_match": "definite",
     "no_added_sugar": "definite",
     "vegan_ingredients": "definite",
     "vegan_cholesterol": "definite",
     "organic_certifier": "definite",
     "eu_front_of_pack": "definite",
-    "text_dietary_information": "definite",
-    "ingredients_match": "definite",
     "net_quantity_pdp": "definite",
     "net_quantity_units": "definite",
     "manufacturer": "definite",
@@ -26,21 +25,20 @@
     "nf_vs_sheet": "definite",
     "hidden": "definite",
     "folds": "definite",
+    "text_dietary_information": "definite",
     "gmo_wording": "likely",
     "claims_approved": "likely",
-    "unapproved_copy": "likely",
     "servings_math": "likely",
     "added_sugars_zero": "likely",
     "safe_area": "likely",
     "type_size": "likely",
+    "unapproved_copy": "likely",
     "eu_allergen_terms": "review",
     "organic_ingredients": "review",
     "sheet_ingredient_duplicates": "review",
     "sheet_sugars_gt_carbs": "review",
     "sheet_open_notes": "review",
     "allergens_declared": "pass",
-    "text_storage_instructions": "pass",
-    "text_marketing_copy": "pass",
     "text_allergen_information": "pass",
     "ingredient_structure": "pass",
     "identity": "pass",
@@ -48,7 +46,9 @@
     "barcode": "pass",
     "nf_present": "pass",
     "subtotals": "pass",
-    "dieline_marks": "pass"
+    "dieline_marks": "pass",
+    "text_storage_instructions": "pass",
+    "text_marketing_copy": "pass"
   },
   "results": [
     {
@@ -65,7 +65,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 7.4
+      "seconds": 6.0
     },
     {
       "id": "D02",
@@ -81,7 +81,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 7.6
+      "seconds": 5.9
     },
     {
       "id": "D03",
@@ -97,7 +97,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 7.0
+      "seconds": 5.9
     },
     {
       "id": "D04",
@@ -113,7 +113,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 10.4
+      "seconds": 6.1
     },
     {
       "id": "D05",
@@ -129,7 +129,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 9.0
+      "seconds": 6.0
     },
     {
       "id": "D06",
@@ -145,7 +145,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 8.3
+      "seconds": 6.0
     },
     {
       "id": "D07",
@@ -161,7 +161,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 9.0
+      "seconds": 6.0
     },
     {
       "id": "D08",
@@ -177,7 +177,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 8.4
+      "seconds": 5.9
     },
     {
       "id": "D09",
@@ -193,7 +193,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 6.7
+      "seconds": 5.9
     },
     {
       "id": "D10",
@@ -209,7 +209,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 7.2
+      "seconds": 5.9
     },
     {
       "id": "D11",
@@ -225,7 +225,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 7.8
+      "seconds": 6.0
     },
     {
       "id": "D12",
@@ -241,7 +241,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 7.6
+      "seconds": 6.0
     },
     {
       "id": "D13",
@@ -257,7 +257,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 6.7
+      "seconds": 6.0
     },
     {
       "id": "D14",
@@ -273,7 +273,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 6.6
+      "seconds": 6.0
     },
     {
       "id": "D15",
@@ -289,7 +289,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 7.9
+      "seconds": 6.0
     },
     {
       "id": "D16",
@@ -305,7 +305,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 8.3
+      "seconds": 6.0
     },
     {
       "id": "R01",
@@ -333,7 +333,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 8.6
+      "seconds": 6.5
     },
     {
       "id": "R02",
@@ -349,7 +349,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 7.3
+      "seconds": 6.2
     },
     {
       "id": "R03",
@@ -371,7 +371,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 7.6
+      "seconds": 5.9
     },
     {
       "id": "R04",
@@ -387,7 +387,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 7.0
+      "seconds": 6.0
     },
     {
       "id": "R05",
@@ -403,7 +403,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 6.7
+      "seconds": 6.0
     },
     {
       "id": "R06",
@@ -419,7 +419,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 6.5
+      "seconds": 6.0
     },
     {
       "id": "R07",
@@ -435,7 +435,7 @@
       },
       "caught": true,
       "false_alarms": [],
-      "seconds": 6.8
+      "seconds": 5.9
     }
   ]
 }

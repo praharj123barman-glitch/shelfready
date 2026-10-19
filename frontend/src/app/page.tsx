@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { ResultsScreen } from "@/components/ResultsScreen";
 import { StartScreen } from "@/components/StartScreen";
-import { getHealth, runReview, type ReviewInput } from "@/lib/api";
+import { compareProof, getHealth, runReview, type CompareInput, type ReviewInput } from "@/lib/api";
 import type { RunResponse } from "@/lib/types";
 
 type State = { kind: "start" } | { kind: "loading"; useAi: boolean } | { kind: "done"; run: RunResponse };
@@ -29,8 +29,24 @@ export default function Home() {
     }
   }
 
+  async function compareWith(previous: RunResponse, input: CompareInput) {
+    setError(null);
+    setState({ kind: "loading", useAi: input.useAi });
+    try {
+      setState({ kind: "done", run: await compareProof(previous.run_id, input) });
+    } catch (e) {
+      // keep the reviewer on the previous results and say what went wrong
+      setState({ kind: "done", run: previous });
+      setError(e instanceof Error ? e.message : "The comparison failed.");
+    }
+  }
+
   if (state.kind === "loading") return <LoadingScreen useAi={state.useAi} />;
-  if (state.kind === "done") return <ResultsScreen run={state.run} onBack={() => setState({ kind: "start" })} />;
+  if (state.kind === "done")
+    return (
+      <ResultsScreen key={state.run.run_id} run={state.run} error={error} onBack={() => setState({ kind: "start" })}
+        onCompare={(input) => compareWith(state.run, input)} />
+    );
   return (
     <>
       <header className="border-b border-line bg-surface">

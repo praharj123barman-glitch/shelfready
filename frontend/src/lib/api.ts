@@ -64,3 +64,17 @@ export function sendFeedback(runId: string, findingId: string, decision: "accept
 export function removeWaiver(waiverId: string) {
   return request<{ removed: boolean }>(`/api/waivers/${waiverId}`, { method: "DELETE" });
 }
+
+export interface CompareInput {
+  useAi: boolean;
+  useSampleV2: boolean;
+  artwork?: File | null;
+}
+
+export function compareProof(previousRunId: string, input: CompareInput): Promise<RunResponse> {
+  const form = new FormData();
+  form.set("use_ai", String(input.useAi));
+  form.set("use_sample_v2", String(input.useSampleV2));
+  if (!input.useSampleV2 && input.artwork) form.set("artwork", input.artwork);
+  return request<RunResponse>(`/api/runs/${previousRunId}/compare`, { method: "POST", body: form });
+}
