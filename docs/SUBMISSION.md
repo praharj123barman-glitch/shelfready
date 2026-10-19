@@ -16,7 +16,7 @@ ShelfReady answers "is this ready to launch?" with findings a reviewer can trust
 
 1. It reads the PDF exactly: live text with positions, layers and drawing order, the barcode, and the
    carton's faces and flaps rebuilt from the dieline's own fold lines.
-2. 31 code checks prove what can be proven: nutrition math, %DV and FDA rounding, ingredients and copy against
+2. 41 code checks prove what can be proven: nutrition math, %DV and FDA rounding, ingredients and copy against
    the approved sheet, claims against ingredients, allergen statements, net quantity rules, hidden objects,
    copy crossing folds, and type size measured from the printed ink. These are labelled Definite.
 3. AI handles what needs judgement: rulebooks written in plain prose, logos and seals drawn as graphics, and
@@ -32,6 +32,13 @@ code, by AI, or not at all.
 On the Esko sample it reports 20 definite issues (for example 166 kcal declared where the macronutrients give
 about 535, a "No Added Sugar" claim with honey, a vegan seal with honey, net weight only on the back, and a
 hidden EU nutrition table under the US panel), plus likely and review items and 17 verified passes.
+
+Built for daily review work: issues are ranked by risk (safety first); the market can be switched between US FDA
+and India FSSAI, and because checks run only when a rule they implement is loaded, the same carton gets
+market-correct results; nutrition math errors come with a corrected Nutrition Facts panel; a new proof can be
+compared with the last one (text diff with before and after crops, issues resolved and introduced); and a
+reviewer's "false alarm, because..." waives that problem on later reviews and teaches the AI the company's
+interpretation.
 
 A mutation eval edits the real sample files 23 ways: **16/16 injected defects detected, 7/7 fixes recognised,
 0 false alarms**. Building it found five real bugs in our own checker, now fixed.
@@ -56,7 +63,7 @@ Attach `docs/architecture.png`. (The same diagram is in the README as Mermaid.)
 * **FastAPI + Pydantic:** API with explicit schemas and validated uploads.
 * **Next.js 16, React 19, Tailwind CSS 4, Framer Motion:** the review app, with evidence boxes drawn in PDF
   coordinates over the artwork.
-* **pytest:** 74 tests (math, parsing, AI guardrails, full sample run) and a mutation eval.
+* **pytest:** 88 tests (math, parsing, AI guardrails, market switch, feedback loop, version compare, full sample run) and a mutation eval.
 
 ## 4. Demo recording
 

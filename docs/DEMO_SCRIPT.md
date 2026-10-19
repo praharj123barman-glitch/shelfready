@@ -1,9 +1,10 @@
-# Demo video script (about 4 minutes)
+# Demo video script (about 5 minutes)
 
 **Before recording**
 * Backend: `cd backend` then `..\.venv\Scripts\python -m uvicorn app:app --port 8000`
 * Frontend in production mode (no dev badge): `cd frontend`, `pnpm build`, then `pnpm start`
-* Run the sample review once before recording, so AI answers come from the cache (about 10 seconds).
+* Before recording, run once: the US sample review, "Compare a new proof" with the generated v2, and the India sample review, so every AI answer comes from the cache (about 10 seconds each).
+* Delete `backend/runs/feedback.json` if you tested waivers, so the demo starts clean.
 * Browser at 100% zoom, full screen, 1600 px wide or more. Close other tabs.
 * Speak slowly. Each block below is about one breath per line.
 
@@ -84,14 +85,28 @@ Click **Accept finding**.
 
 > Reviewers accept findings or mark false alarms with a reason, which we keep to improve the checks.
 
-### 3:05 to 3:35 · Rule coverage
+### 3:05 to 3:25 · Rule coverage
 
 Click the **Rule coverage** tab.
 
 > Every rule from all three sources, and how it was checked: by code, by AI, or not applicable. Nothing is
-> skipped silently. If the AI is unavailable, the rule says a human must check it.
+> skipped silently.
 
-### 3:35 to 4:10 · Does it actually work?
+### 3:25 to 3:55 · A second proof
+
+Click **Compare a new proof**, then **Use generated v2 (demo)**.
+
+> The agency sends a second proof. ShelfReady checks it with the same rules and shows what changed: six issues
+> resolved, but one new one. Brazil nuts disappeared from the allergen statement. Before and after, side by side.
+
+### 3:55 to 4:20 · Same carton, another market
+
+Click **New review**, switch the market to **India**, click **Review the sample carton**.
+
+> Rules are data. Under India's FSSAI rules the same carton gets different results: no FSSAI licence number,
+> no MRP, no per 100 gram nutrition table, and grams alone are fine here. US-only checks switch off by themselves.
+
+### 4:20 to 4:50 · Does it actually work?
 
 Show `backend/eval/RESULTS.md` in the editor (or the README "Measured accuracy" table).
 

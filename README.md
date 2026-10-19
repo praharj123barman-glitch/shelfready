@@ -44,6 +44,23 @@ honest line between "this is wrong" and "please look at this". So ShelfReady is 
 Passes are shown too. Saying "the barcode scans and matches the approved UPC" is how a reviewer learns what
 they no longer need to check, and it keeps false alarms visible as a cost.
 
+Every issue also carries a **risk**, separate from how sure we are: **Safety** (allergens, recipe changes that can
+hide one), **Legal** (mandatory information, claims, nutrition), **Production** (folds, hidden objects, type size),
+**Data** (the approved sheet itself is wrong) and **Brand** (copy, taglines, retailer style). Findings are ordered
+by verdict, then risk, so an allergen problem is never buried under a tagline.
+
+## What a reviewer can do with it
+
+| Feature | What it does |
+|---|---|
+| **Evidence on the artwork** | Every finding is boxed on the dieline; the detail panel shows a magnified crop of the exact spot, the rule quoted, and a fix |
+| **Switch market: US / India** | The same carton against US FDA or India FSSAI and Legal Metrology rules. Checks run only when a rule they implement is loaded, so US-only checks (ounces, FDA rounding) switch off and India's switch on (FSSAI licence, veg mark, per-100 g nutrition, MRP, consumer care, "Use by") |
+| **Corrected Nutrition Facts** | For nutrition math errors, the panel as its printed amounts require: FDA rounding, calories from 4-4-9, every %DV recomputed, with the printed values struck through |
+| **Compare a new proof** | Upload v2: a text diff (changed, added, removed, moved, with before and after crops) and an issue delta (resolved, introduced, still open). AI-judged changes are tagged, since AI can vary between runs |
+| **Feedback that sticks** | "False alarm, because..." waives that problem for that artwork file on later reviews (still listed, with the reason and an undo); on an AI finding the reason becomes guidance the AI reads next time |
+| **Follow-up questions** | Ask about any finding; answers use only the evidence and cite artwork lines, which are checked |
+| **Rule coverage** | Every rule supplied, and whether code, AI or nobody checked it |
+
 ## What it finds on the Esko sample
 
 On the Dancing Fish granola carton (US) with its content sheet, ShelfReady reports **20 definite, about 10 likely,
@@ -100,7 +117,7 @@ flowchart TB
     end
 
     subgraph Code["2 Prove in code"]
-        CHK[31 checks: nutrition math, %DV, rounding,<br/>claims vs ingredients, allergens, net quantity,<br/>copy vs approved, hidden text, folds, type size]
+        CHK[41 checks: nutrition math, %DV, rounding,<br/>claims vs ingredients, allergens, net quantity,<br/>copy vs approved, hidden text, folds, type size]
     end
 
     subgraph AI["3 Reason with AI"]
@@ -144,11 +161,18 @@ A PNG version is in [`docs/architecture.png`](docs/architecture.png).
 | API | **FastAPI** + Pydantic | Explicit request and response schemas, validated uploads, clear errors |
 | Web app | **Next.js 16**, React 19, Tailwind CSS 4, Framer Motion, Lucide icons | Evidence boxes drawn in PDF coordinates over the artwork; magnified evidence crops |
 
-Rules are data, not code. `rules/us_fda_food.json` holds 16 rules paraphrased from 21 CFR 101 and the FD&C Act
-with citations; `rules/dancing_fish_company_rulebook.md` is a **demo company rulebook we wrote** to show the
-company-interpretation layer (vegan claims, approved claims list, EU terms on US packs, folds and safe areas);
-`rules/retailer_guidelines_demo.txt` is a **demo retailer policy in plain prose** that the AI turns into
-checkable rules. The coverage tab lists every rule and whether code, AI or nobody checked it.
+Rules are data, not code. Each check declares the rules it implements and runs only when one of them is loaded.
+
+| Rule file | Contents |
+|---|---|
+| `rules/us_fda_food.json` | 16 rules paraphrased from 21 CFR 101 and the FD&C Act, with citations |
+| `rules/india_fssai_food.json` | 13 rules from the FSS (Labelling and Display) Regulations 2020, related FSS regulations and the Legal Metrology (Packaged Commodities) Rules 2011 |
+| `rules/artwork_approval_core.json` | 5 market-independent rules: approved copy, hidden objects, folds, dieline marks, consistent source data |
+| `rules/dancing_fish_company_rulebook.md` | **Demo company rulebook we wrote** to show the company-interpretation layer |
+| `rules/retailer_guidelines_demo.txt` | **Demo retailer policy in plain prose**, turned into checkable rules by AI |
+
+The same requirement can come from different sources (the company's own "approved copy" rule or the core one;
+FDA's or FSSAI's "no added sugar"), so a finding cites whichever equivalent rule is loaded.
 
 ## Handling uncertainty and incorrect AI output
 
@@ -161,8 +185,12 @@ checkable rules. The coverage tab lists every rule and whether code, AI or nobod
 * **No silent gaps.** If a model is rate limited, the next model in the chain answers; if all fail, the rule is
   reported as "could not be checked automatically, a human must check this rule". If a check crashes, the
   report says so and the launch verdict cannot be "ready".
-* **Reviewer feedback.** Every finding can be accepted or marked as a false alarm with a reason. Feedback is
-  stored with the run as labelled examples for improving checks; it is not applied automatically.
+* **Reviewer feedback that changes the next run.** A false alarm becomes a waiver for that exact problem on that
+  exact artwork file (matched by file hash): the finding stays listed with the reviewer's reason and an undo, but
+  no longer blocks the launch verdict. On an AI finding the reason is also appended to the rule as guidance the
+  AI reads on every later review. Nothing is ever deleted silently.
+* **AI variation is kept visible.** When two proofs are compared, the headline counts use code-checked findings
+  only; AI-judged changes are listed separately with an AI tag.
 * **The source of truth can be wrong too.** Impossible values and open notes in the approved sheet are reported
   as review items rather than used blindly.
 
@@ -191,7 +219,7 @@ Tests and eval:
 
 ```bash
 cd backend
-../.venv/Scripts/python -m pytest -q          # 74 tests: math, parsing, guardrails, full sample run
+../.venv/Scripts/python -m pytest -q          # 88 tests: math, parsing, guardrails, markets, feedback, compare, full sample run
 ../.venv/Scripts/python -m eval.run_eval      # mutation eval, writes eval/RESULTS.md
 ```
 
@@ -205,7 +233,7 @@ output, so a repeat review takes about 10 seconds.
 * The FDA rule pack is a core subset, paraphrased. Always confirm against the current eCFR before release.
 * Without dieline guide labels, left and right side panels cannot be told apart (front and back are found from
   geometry and type size).
-* Only single-page artwork PDFs are read. Only US rules are bundled; another market is a new rule pack.
+* Only single-page artwork PDFs are read. US and India rules are bundled; another market is a new rule pack.
 * The company rulebook and retailer guidelines are demo documents written for this prototype.
 
 ## Repository layout
