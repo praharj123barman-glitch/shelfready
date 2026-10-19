@@ -36,7 +36,8 @@ Logos, certification marks, symbols and barcodes are usually graphics, so look f
 Work only from what you are given. Never use outside knowledge about this product.
 For every rule, cite evidence: either kind "text" with the line id and the exact words from that line,
 or kind "visual" with the panel name and a short description of what you see in that panel image,
-or, when something required is missing, kind "absent" with the words or symbols you searched for.
+or, when something required is missing, kind "absent" with the words or symbols you searched for
+(and the panel name if it is missing from one panel only).
 If what you are given is not enough to decide, answer "review" and say what a human must check.
 Use "not_applicable" when the rule does not apply to this product.
 Use "likely" only when the evidence clearly breaks the rule. Use "pass" only when it clearly satisfies it.
@@ -47,7 +48,10 @@ class CitedEvidence(BaseModel):
     kind: Literal["text", "visual", "absent"]
     line_id: str | None = Field(default=None, description="for kind text: the line id, e.g. L013")
     quote: str | None = Field(default=None, description="for kind text: exact words copied from that line")
-    panel: str | None = Field(default=None, description="for kind visual: the exact panel name from the IMAGE caption")
+    panel: str | None = Field(
+        default=None,
+        description="kind visual: the exact panel name from the IMAGE caption; kind absent: the panel it is missing from, or empty for the whole pack",
+    )
     description: str | None = Field(default=None, description="for kind visual: what is seen in the panel image")
     searched_for: list[str] = Field(
         default_factory=list,
@@ -108,12 +112,16 @@ def verify_evidence(ctx: CheckContext, items: list[CitedEvidence]) -> tuple[list
     """Keep evidence that checks out. Text quotes must be in the cited line;
     visual evidence must name a real panel (its content cannot be verified in code)."""
     ok, problems = [], []
-    all_text = [(ln.id, _norm(ln.text)) for ln in ctx.art.copy_lines()]
     for e in items:
         if e.kind == "absent":
+            # "missing from the front" is checked against the front only, not the whole carton
+            scope = e.panel if e.panel in ctx.art.panels else None
+            texts = [(ln.id, _norm(ln.text)) for ln in ctx.art.copy_lines(scope)]
             terms = [_norm(t) for t in e.searched_for if t.strip()]
-            hits = [(lid, t) for t in terms for lid, txt in all_text if t in txt]
-            if not terms:
+            hits = [(lid, t) for t in terms for lid, txt in texts if t in txt]
+            if e.panel and scope is None:
+                problems.append(f"absence claimed for an unknown panel '{e.panel}'")
+            elif not terms:
                 problems.append("absence claimed without saying what was searched for")
             elif hits:
                 problems.append("claimed missing, but " + ", ".join(f"'{t}' is in {lid}" for lid, t in hits[:3]))
@@ -138,7 +146,8 @@ def verify_evidence(ctx: CheckContext, items: list[CitedEvidence]) -> tuple[list
 
 def _evidence(ctx: CheckContext, e: CitedEvidence) -> Evidence:
     if e.kind == "absent":
-        return Evidence(source="computed", text="Verified absent from all artwork text: " + ", ".join(f"'{t}'" for t in e.searched_for))
+        where = f"the {e.panel} panel text" if e.panel else "all artwork text"
+        return Evidence(source="computed", text=f"Verified absent from {where}: " + ", ".join(f"'{t}'" for t in e.searched_for))
     if e.kind == "visual":
         return Evidence(source="artwork", text=f"Seen in image: {e.description}", panel=e.panel, bbox=ctx.art.panels[e.panel])
     return art_evidence([ctx.line(e.line_id)], text=e.quote)

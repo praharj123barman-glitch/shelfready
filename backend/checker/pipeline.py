@@ -12,7 +12,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from .ai.client import AIError, ai_available
+from .ai.client import MODELS_USED, AIError, ai_available
 from .ai.marks import check_marks
 from .ai.rule_checker import check_rules, extract_rules, uncovered_rules
 from .artwork import read_artwork
@@ -40,6 +40,7 @@ class ReviewResult(BaseModel):
     coverage: list[dict]
     ai_ran: bool
     ai_note: str | None = None
+    ai_models: list[str] = []  # which models actually answered (cached answers say so)
 
 
 def load_rule_file(path: Path) -> tuple[RuleSet, RuleSource]:
@@ -89,6 +90,7 @@ def review(artwork_path: Path, sheet_path: Path | None, rule_paths: list[Path], 
     ai_ran = use_ai and ai_available()
     note, not_applicable = None, []
     if ai_ran:
+        MODELS_USED.clear()
         ctx = CheckContext.build(art, rules, spec, first_id=len(report.findings) + 1)  # ids stay unique
         rule_findings, not_applicable = check_rules(ctx, uncovered_rules(rules.rules, report.findings))
         report = finalize(report, report.findings + rule_findings + check_marks(ctx))
@@ -98,5 +100,5 @@ def review(artwork_path: Path, sheet_path: Path | None, rule_paths: list[Path], 
         note = "; ".join(filter(None, [note] + ai_errors))
     return ReviewResult(
         report=report, rule_sources=sources, coverage=coverage_table(rules, report.findings, not_applicable),
-        ai_ran=ai_ran, ai_note=note,
+        ai_ran=ai_ran, ai_note=note, ai_models=sorted(MODELS_USED) if ai_ran else [],
     )

@@ -67,6 +67,7 @@ export interface ReviewResult {
   coverage: CoverageRow[];
   ai_ran: boolean;
   ai_note: string | null;
+  ai_models: string[];
 }
 
 export interface RunResponse {

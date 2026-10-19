@@ -10,7 +10,7 @@ import { FindingDetail } from "./FindingDetail";
 import { FindingsList } from "./FindingsList";
 
 export function ResultsScreen({ run, onBack }: { run: RunResponse; onBack: () => void }) {
-  const { report, ai_ran, ai_note, coverage, rule_sources } = run.result;
+  const { report, ai_ran, ai_note, ai_models, coverage, rule_sources } = run.result;
   const firstIssue = report.findings.find((f) => f.verdict !== "pass") ?? report.findings[0] ?? null;
   const [selected, setSelected] = useState<Finding | null>(firstIssue);
   const [filter, setFilter] = useState<Verdict | "issues" | "all">("issues");
@@ -41,6 +41,7 @@ export function ResultsScreen({ run, onBack }: { run: RunResponse; onBack: () =>
           </p>
           <p className="ml-auto truncate text-xs text-ink-faint" title={report.artwork}>
             {report.artwork}{report.content_sheet ? ` vs ${report.content_sheet}` : ""}
+            {ai_ran && ai_models.length > 0 && ` · AI: ${ai_models.join(", ")}`}
           </p>
         </div>
         {(ai_note || !ai_ran || report.check_errors.length > 0) && (

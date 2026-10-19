@@ -70,21 +70,50 @@ def _client():
 
 
 CACHE_DIR = Path(__file__).resolve().parents[2] / "runs" / "ai_cache"
-RATE_LIMIT_WAITS = [10, 30]  # seconds between retries after a 429 (free tier is ~10 calls/min)
+RATE_LIMIT_WAITS = [15]  # seconds before one more round of the model chain after every model refused
 
 
 def _cache_key(prompt, schema: type[BaseModel], system: str) -> str:
     h = hashlib.sha256()
-    for part in [model_name(), system, schema.__name__, json.dumps(schema.model_json_schema(), sort_keys=True)]:
+    # keyed on the request, not the model: any model in the chain may have answered it
+    for part in [system, schema.__name__, json.dumps(schema.model_json_schema(), sort_keys=True)]:
         h.update(part.encode())
     for p in prompt if isinstance(prompt, list) else [prompt]:
         h.update(p.encode() if isinstance(p, str) else getattr(getattr(p, "inline_data", None), "data", b"") or b"")
     return h.hexdigest()[:32]
 
 
-def _call_with_timeout(prompt, config, timeout: float):
+def model_chain() -> list[str]:
+    """Primary model first, then GEMINI_FALLBACK_MODELS (comma separated)."""
+    _load_env()
+    extra = [m.strip() for m in os.environ.get("GEMINI_FALLBACK_MODELS", "").split(",") if m.strip()]
+    return [model_name()] + [m for m in extra if m != model_name()]
+
+
+MODELS_USED: set[str] = set()  # models that actually answered, reported with each review
+RETRYABLE = ("429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "timed out")
+
+
+def _call_with_fallback(prompt, config, timeout: float):
+    """Quota or overload on one model moves straight to the next; when every model
+    fails, wait and go round once more before giving up with a clear error."""
+    last: AIError | None = None
+    for round_no, wait in enumerate([0] + RATE_LIMIT_WAITS):
+        time.sleep(wait)
+        for model in model_chain():
+            try:
+                return _call_with_timeout(prompt, config, timeout, model), model
+            except AIError as exc:
+                if not any(code in str(exc) for code in RETRYABLE):
+                    raise
+                last = exc
+                log.warning("%s unavailable (%s), trying next model", model, str(exc)[:60])
+    raise AIError(f"All models are rate limited or unavailable ({', '.join(model_chain())}): {last}")
+
+
+def _call_with_timeout(prompt, config, timeout: float, model: str):
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(lambda: _client().models.generate_content(model=model_name(), contents=prompt, config=config))
+        future = pool.submit(lambda: _client().models.generate_content(model=model, contents=prompt, config=config))
         try:
             return future.result(timeout=timeout)
         except concurrent.futures.TimeoutError as exc:
@@ -107,28 +136,24 @@ def generate_json(prompt: str | list, schema: type[T], system: str, temperature:
     key = _cache_key(prompt, schema, system)
     cached = CACHE_DIR / f"{key}.json"
     if use_cache and cached.exists():
-        return schema.model_validate_json(cached.read_text(encoding="utf-8"))
+        entry = json.loads(cached.read_text(encoding="utf-8"))
+        if "result" in entry:  # entries record which model wrote them
+            MODELS_USED.add(f"{entry.get('model', '?')} (cached)")
+            return schema.model_validate(entry["result"])
 
     timeout = float(os.environ.get("AI_TIMEOUT_SECONDS", "60"))
     config = types.GenerateContentConfig(
         system_instruction=system, temperature=temperature, response_mime_type="application/json", response_schema=schema
     )
-    for attempt, wait in enumerate([0] + RATE_LIMIT_WAITS):
-        time.sleep(wait)
-        try:
-            response = _call_with_timeout(prompt, config, timeout)
-            break
-        except AIError as exc:
-            if "429" not in str(exc) or attempt == len(RATE_LIMIT_WAITS):
-                raise
-            log.warning("rate limited, retrying in %ss", RATE_LIMIT_WAITS[attempt])
+    response, used = _call_with_fallback(prompt, config, timeout)
+    MODELS_USED.add(used)
     try:
         result = schema.model_validate_json(response.text or "")
     except ValidationError as exc:
         log.warning("model returned invalid JSON: %s", (response.text or "")[:300])
         raise AIError(f"Model returned an answer that does not match the expected format: {exc.errors()[:2]}") from exc
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cached.write_text(result.model_dump_json(), encoding="utf-8")
+    cached.write_text(json.dumps({"model": used, "result": result.model_dump()}), encoding="utf-8")
     return result
 
 
