@@ -160,3 +160,74 @@ def expected_dv(key: str, amount: float) -> float | None:
 
 def atwater_calories(fat_g: float, carb_g: float, protein_g: float) -> float:
     return 9 * fat_g + 4 * carb_g + 4 * protein_g
+
+
+# ---------------- corrected panel ----------------
+
+PANEL_ORDER = [
+    "total_fat", "saturated_fat", "trans_fat", "cholesterol", "sodium", "total_carbohydrate",
+    "dietary_fiber", "total_sugars", "added_sugars", "protein", "vitamin_d", "calcium", "iron", "potassium",
+]
+LABELS = {
+    "total_fat": "Total Fat", "saturated_fat": "Saturated Fat", "trans_fat": "Trans Fat", "cholesterol": "Cholesterol",
+    "sodium": "Sodium", "total_carbohydrate": "Total Carbohydrate", "dietary_fiber": "Dietary Fiber",
+    "total_sugars": "Total Sugars", "added_sugars": "Incl. Added Sugars", "protein": "Protein", "vitamin_d": "Vitamin D",
+    "calcium": "Calcium", "iron": "Iron", "potassium": "Potassium",
+}
+INDENTED = {"saturated_fat", "trans_fat", "dietary_fiber", "total_sugars", "added_sugars"}
+
+
+class CorrectedRow(BaseModel):
+    key: str
+    label: str
+    indent: bool
+    printed_amount: str
+    amount: str
+    printed_dv: str | None
+    dv: str | None
+    changed: bool
+
+
+class CorrectedPanel(BaseModel):
+    basis: str  # what was assumed, shown to the user
+    servings_per_container: float | None
+    printed_serving: str | None
+    calories_printed: float | None
+    calories: float | None
+    rows: list[CorrectedRow]
+
+
+def _fmt(x: float) -> str:
+    return f"{x:g}"
+
+
+def corrected_panel(nf: NutritionPanel) -> CorrectedPanel | None:
+    """What the panel must say if the printed amounts are right: amounts rounded
+    the FDA way, calories from the 4-4-9 factors, every %DV recomputed."""
+    n = nf.nutrients
+    if not n:
+        return None
+    rows = []
+    for key in PANEL_ORDER:
+        v = n.get(key)
+        if v is None:
+            continue
+        rounded = expected_rounding(key, v.amount)
+        amount = v.amount if rounded is None else rounded
+        dv = expected_dv(key, amount)
+        dv_text = f"{_fmt(dv)}%" if dv is not None and key != "protein" else None
+        printed_amount = f"{_fmt(v.amount)}{v.unit}"
+        rows.append(CorrectedRow(
+            key=key, label=LABELS[key], indent=key in INDENTED, printed_amount=printed_amount,
+            amount=f"{_fmt(amount)}{v.unit}", printed_dv=v.dv_text, dv=dv_text,
+            changed=f"{_fmt(amount)}{v.unit}" != printed_amount or (dv_text or "") != (v.dv_text or "").rstrip("*"),
+        ))
+    calories = None
+    if all(k in n for k in ("total_fat", "total_carbohydrate", "protein")):
+        calories = expected_rounding("calories", atwater_calories(n["total_fat"].amount, n["total_carbohydrate"].amount, n["protein"].amount))
+    return CorrectedPanel(
+        basis="Computed from the amounts printed on the artwork: FDA rounding, calories from 4-4-9, every %DV recomputed. "
+              "The amounts themselves must be confirmed against the recipe first, especially where the content sheet disagrees.",
+        servings_per_container=nf.servings_per_container, printed_serving=nf.serving_size_text,
+        calories_printed=nf.calories, calories=calories, rows=rows,
+    )

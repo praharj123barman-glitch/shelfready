@@ -42,3 +42,18 @@ def test_daily_value(key, amount, expected):
 
 def test_atwater():
     assert atwater_calories(fat_g=15, carb_g=66, protein_g=34) == 535
+
+
+def test_corrected_panel_from_printed_amounts():
+    from pathlib import Path
+
+    from checker.artwork import read_artwork
+    from checker.nutrition import corrected_panel, read_nutrition_panel
+
+    root = Path(__file__).resolve().parents[2]
+    panel = corrected_panel(read_nutrition_panel(read_artwork(root / "samples" / "DancingFish_Granola_Berry_US_Carton.pdf")))
+    rows = {r.key: r for r in panel.rows}
+    assert panel.calories_printed == 166 and panel.calories == 540  # 9*15 + 4*66 + 4*34 = 535, rounded to 10
+    assert rows["sodium"].amount == "25mg" and rows["sodium"].dv == "1%"
+    assert rows["total_fat"].dv == "19%" and rows["total_fat"].changed
+    assert rows["added_sugars"].changed is False and rows["protein"].dv is None

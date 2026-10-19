@@ -4,9 +4,13 @@ import { motion } from "framer-motion";
 import { Calculator, Check, FileSpreadsheet, Image as ImageIcon, Lightbulb, ScrollText, ThumbsDown } from "lucide-react";
 import { useState } from "react";
 import { removeWaiver, sendFeedback } from "@/lib/api";
-import type { Evidence, FeedbackResult, Finding } from "@/lib/types";
+import type { CorrectedPanel, Evidence, FeedbackResult, Finding } from "@/lib/types";
 import { CATEGORY_LABELS, VERDICTS } from "@/lib/verdicts";
 import { ChatBox } from "./ChatBox";
+import { CorrectedNutrition } from "./CorrectedNutrition";
+
+// findings whose fix is easiest to understand as the corrected panel itself
+const NUTRITION_MATH = new Set(["calories_atwater", "rounding", "daily_values"]);
 import { EvidenceCrop } from "./EvidenceCrop";
 import { MethodTag, RiskTag, VerdictBadge } from "./VerdictBadge";
 
@@ -126,7 +130,9 @@ function Feedback({ runId, finding }: { runId: string; finding: Finding }) {
   );
 }
 
-export function FindingDetail({ runId, finding, page }: { runId: string; finding: Finding | null; page: PageImage }) {
+export function FindingDetail({ runId, finding, page, corrected }: {
+  runId: string; finding: Finding | null; page: PageImage; corrected: CorrectedPanel | null;
+}) {
   return (
     <div className="h-full overflow-y-auto rounded-card border border-line bg-surface shadow-card">
       {/* enter-only animation: an exiting panel would stay clickable for a moment
@@ -160,6 +166,8 @@ export function FindingDetail({ runId, finding, page }: { runId: string; finding
             )}
 
             {finding.details.length > 0 && <DetailsTable rows={finding.details} />}
+
+            {corrected && NUTRITION_MATH.has(finding.check) && <CorrectedNutrition panel={corrected} />}
 
             {finding.evidence.length > 0 && (
               <section>

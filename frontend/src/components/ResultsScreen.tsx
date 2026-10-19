@@ -93,7 +93,7 @@ export function ResultsScreen({ run, onBack }: { run: RunResponse; onBack: () =>
           </div>
           <div className="min-h-[360px] lg:min-h-0">
             <FindingDetail
-              runId={run.run_id} finding={selected}
+              runId={run.run_id} finding={selected} corrected={run.result.corrected_nutrition}
               page={{ imageUrl: run.image_url, pageWidth: run.page_width, pageHeight: run.page_height }}
             />
           </div>

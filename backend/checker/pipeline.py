@@ -22,6 +22,7 @@ from .engine import Report, finalize, run_checks
 from .feedback import STORE as FEEDBACK_STORE
 from .feedback import apply_waivers, with_rule_notes
 from .models import Finding
+from .nutrition import CorrectedPanel, corrected_panel, read_nutrition_panel
 from .rules import RuleSet, load_regulation_pack, load_rulebook
 
 log = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ class ReviewResult(BaseModel):
     ai_ran: bool
     ai_note: str | None = None
     ai_models: list[str] = []  # which models actually answered (cached answers say so)
+    corrected_nutrition: CorrectedPanel | None = None  # US Nutrition Facts as the printed amounts require
 
 
 def load_rule_file(path: Path) -> tuple[RuleSet, RuleSource]:
@@ -103,9 +105,11 @@ def review(
     else:
         note = "AI checks did not run (no GEMINI_API_KEY or AI switched off). Only code checks are shown."
     report = finalize(report, apply_waivers(report.findings, artwork_path, feedback_store))
+    nf = read_nutrition_panel(art) if rules.get("FDA-101.9-DV") else None  # only meaningful under US rules
+    corrected = corrected_panel(nf) if nf else None
     if ai_errors:
         note = "; ".join(filter(None, [note] + ai_errors))
     return ReviewResult(
         report=report, rule_sources=sources, coverage=coverage_table(rules, report.findings, not_applicable),
-        ai_ran=ai_ran, ai_note=note, ai_models=sorted(MODELS_USED) if ai_ran else [],
+        ai_ran=ai_ran, ai_note=note, ai_models=sorted(MODELS_USED) if ai_ran else [], corrected_nutrition=corrected,
     )

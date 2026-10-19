@@ -87,6 +87,27 @@ export interface ReviewResult {
   ai_ran: boolean;
   ai_note: string | null;
   ai_models: string[];
+  corrected_nutrition: CorrectedPanel | null;
+}
+
+export interface CorrectedRow {
+  key: string;
+  label: string;
+  indent: boolean;
+  printed_amount: string;
+  amount: string;
+  printed_dv: string | null;
+  dv: string | null;
+  changed: boolean;
+}
+
+export interface CorrectedPanel {
+  basis: string;
+  servings_per_container: number | null;
+  printed_serving: string | null;
+  calories_printed: number | null;
+  calories: number | null;
+  rows: CorrectedRow[];
 }
 
 export interface RunResponse {
