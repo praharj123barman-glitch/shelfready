@@ -91,6 +91,8 @@ class Artwork(BaseModel):
     width: float
     height: float
     panels: dict[str, BBox]
+    # panels that carry any design artwork (text or graphics); empty flaps are skipped
+    content_panels: list[str] = Field(default_factory=list)
     lines: list[TextLine]
     barcodes: list[dict] = Field(default_factory=list)
 

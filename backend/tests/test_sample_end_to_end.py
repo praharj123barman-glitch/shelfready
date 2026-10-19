@@ -44,6 +44,14 @@ def test_hidden_eu_table_detected_and_visible_panel_not(artwork):
     assert not any(l.hidden for l in artwork.lines if l.text.startswith("Total Carbohydrate"))
 
 
+def test_panels_follow_the_fold_lines(artwork):
+    # the body is bounded by the horizontal folds at y=401 and y=854; above them are flaps
+    assert round(artwork.panels["front"].y0) == 401 and round(artwork.panels["front"].y1) == 854
+    badge = next(l for l in artwork.lines if l.text == "ADDED")
+    assert badge.panel == "back top flap"
+    assert next(l for l in artwork.lines if l.text == "BERRY CRUNCH" and l.size > 18).panel == "front"
+
+
 def test_dieline_marks_are_not_copy(artwork):
     assert all(l.role == "guide" for l in artwork.lines if l.text in {"Front panel", "Orientation", "Copy free"})
 
@@ -65,6 +73,10 @@ def test_dieline_marks_are_not_copy(artwork):
         ("manufacturer", "definite"),
         ("hidden", "definite"),
         ("ingredients_match", "definite"),
+        ("folds", "definite"),
+        ("net_qty_height", "definite"),
+        ("type_size", "likely"),
+        ("safe_area", "likely"),
         ("servings_math", "likely"),
         ("added_sugars_zero", "likely"),
         ("eu_allergen_terms", "review"),

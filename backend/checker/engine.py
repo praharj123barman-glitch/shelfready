@@ -7,7 +7,7 @@ from collections import Counter
 
 from pydantic import BaseModel
 
-from .checks import claims_checks, label_checks, match_checks, nutrition_checks
+from .checks import claims_checks, label_checks, match_checks, nutrition_checks, print_checks
 from .checks.base import CheckContext
 from .content_sheet import ApprovedSpec
 from .models import Artwork, Finding, Verdict
@@ -15,7 +15,9 @@ from .rules import RuleSet
 
 log = logging.getLogger(__name__)
 
-ALL_CHECKS = nutrition_checks.CHECKS + label_checks.CHECKS + claims_checks.CHECKS + match_checks.CHECKS
+ALL_CHECKS = (
+    nutrition_checks.CHECKS + label_checks.CHECKS + claims_checks.CHECKS + match_checks.CHECKS + print_checks.CHECKS
+)
 VERDICT_ORDER = {Verdict.DEFINITE: 0, Verdict.LIKELY: 1, Verdict.REVIEW: 2, Verdict.PASS: 3}
 
 

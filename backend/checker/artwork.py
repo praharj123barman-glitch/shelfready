@@ -11,8 +11,10 @@ that we recover three things a plain text dump loses:
 
 from __future__ import annotations
 
+import functools
 import re
 import statistics
+from collections import Counter
 from pathlib import Path
 
 import pymupdf
@@ -85,7 +87,69 @@ def _looks_letter_spaced(text: str) -> bool:
     return singles / len(tokens) >= 0.5
 
 
+def dieline_segments(page: pymupdf.Page, layer_word: str) -> list[tuple[float, float, float, float]]:
+    """Straight line segments drawn on dieline layers whose name contains `layer_word` ('crease', 'cut', ...)."""
+    segs = []
+    for d in page.get_drawings():
+        if layer_word not in (d.get("layer") or "").lower():
+            continue
+        for it in d["items"]:
+            if it[0] == "l":
+                segs.append((it[1].x, it[1].y, it[2].x, it[2].y))
+            elif it[0] == "re":
+                r = it[1]
+                segs += [(r.x0, r.y0, r.x1, r.y0), (r.x1, r.y0, r.x1, r.y1), (r.x0, r.y1, r.x1, r.y1), (r.x0, r.y0, r.x0, r.y1)]
+    return segs
+
+
+def _panels_from_creases(page: pymupdf.Page, guide_lines: list[tuple[str, BBox]]) -> dict[str, BBox] | None:
+    """Faces are the cells between fold lines: the long horizontal creases bound
+    the body, the vertical creases split it into faces, and what lies above or
+    below each face is that face's top or bottom flap."""
+    creases = dieline_segments(page, "crease")
+    cuts = dieline_segments(page, "cut")
+    if not creases:
+        return None
+    W, H = page.rect.width, page.rect.height
+    # a body fold may be drawn as one long line or as one segment per face,
+    # so sum the horizontal crease length at each height
+    length_at: dict[int, float] = {}
+    for x0, y0, x1, y1 in creases:
+        if abs(y0 - y1) < 1:
+            length_at[round(y0)] = length_at.get(round(y0), 0) + abs(x1 - x0)
+    horiz = sorted(y for y, total in length_at.items() if total > W * 0.5)
+    if len(horiz) < 2:
+        return None
+    top, bottom = horiz[0], horiz[-1]
+    xs = sorted({round(x0) for x0, y0, x1, y1 in creases + cuts if abs(x0 - x1) < 1 and min(y0, y1) <= top + 1 and max(y0, y1) >= bottom - 1})
+    cols = [(a, b) for a, b in zip(xs, xs[1:]) if b - a > 60]
+    panels: dict[str, BBox] = {}
+    for x0, x1 in cols:
+        name = next(
+            (m.group(1).lower() for text, bb in guide_lines
+             if (m := re.match(r"(front|back|left|right) panel", text.strip(), re.I)) and x0 <= bb.cx <= x1 and top <= bb.cy <= bottom),
+            None,
+        )
+        if not name or name in panels:
+            continue
+        panels[name] = BBox(x0=x0, y0=top, x1=x1, y1=bottom)
+        panels[f"{name} top flap"] = BBox(x0=x0, y0=0, x1=x1, y1=top)
+        panels[f"{name} bottom flap"] = BBox(x0=x0, y0=bottom, x1=x1, y1=H)
+    if not panels:
+        return None
+    first = min(p.x0 for p in panels.values())
+    if first > 5:
+        panels["glue flap"] = BBox(x0=0, y0=top, x1=first, y1=bottom)
+    return panels
+
+
 def _detect_panels(page: pymupdf.Page, guide_lines: list[tuple[str, BBox]]) -> dict[str, BBox]:
+    """Use the dieline fold lines when the file has them; otherwise fall back
+    to the large filled panel shapes."""
+    return _panels_from_creases(page, guide_lines) or _panels_from_fills(page, guide_lines)
+
+
+def _panels_from_fills(page: pymupdf.Page, guide_lines: list[tuple[str, BBox]]) -> dict[str, BBox]:
     """Find panels from the large filled shapes of the dieline.
 
     Panel faces are drawn as big filled rectangles; their edges give the
@@ -120,15 +184,28 @@ def _detect_panels(page: pymupdf.Page, guide_lines: list[tuple[str, BBox]]) -> d
     return panels
 
 
+def _content_panels(page: pymupdf.Page, panels: dict[str, BBox], lines: list[TextLine]) -> list[str]:
+    """Faces always count; a flap counts when design-layer text or graphics sit inside it."""
+    design = [
+        _bbox(d["rect"]) for d in page.get_drawings()
+        if not _is_structural_layer(d.get("layer")) and d["rect"].width < page.rect.width * 0.5
+    ] + [
+        _bbox(img["bbox"]) for img in page.get_image_info()
+    ]
+    out = []
+    for name, p in panels.items():
+        has_text = any(ln.panel == name and ln.role == "copy" for ln in lines)
+        has_art = any(p.x0 <= b.cx <= p.x1 and p.y0 <= b.cy <= p.y1 for b in design)
+        if " " not in name or has_text or has_art:
+            out.append(name)
+    return out
+
+
 def _panel_for(bb: BBox, panels: dict[str, BBox]) -> str:
-    for name in ["front", "back", "left", "right"]:
-        p = panels.get(name)
-        if p and p.x0 <= bb.cx <= p.x1 and p.y0 <= bb.cy <= p.y1:
+    """Panel containing the box centre; faces win over flaps on shared edges."""
+    for name, p in sorted(panels.items(), key=lambda kv: " " in kv[0]):
+        if p.x0 <= bb.cx <= p.x1 and p.y0 <= bb.cy <= p.y1:
             return name
-    if "top" in panels and bb.cy < panels["top"].y1:
-        return "top"
-    if "bottom" in panels and bb.cy > panels["bottom"].y0:
-        return "bottom"
     return "other"
 
 
@@ -311,6 +388,7 @@ def read_artwork(pdf_path: str | Path, page_no: int = 0) -> Artwork:
         width=page.rect.width,
         height=page.rect.height,
         panels=panels,
+        content_panels=_content_panels(page, panels, lines),
         lines=lines,
         barcodes=read_barcodes(page, panels),
     )
@@ -328,6 +406,67 @@ def read_barcodes(page: pymupdf.Page, panels: dict[str, BBox], dpi: int = 300) -
         bb = BBox(x0=min(xs) * scale, y0=min(ys) * scale, x1=max(xs) * scale, y1=max(ys) * scale)
         found.append({"format": str(r.format).split(".")[-1], "text": r.text, "bbox": bb.model_dump(), "panel": _panel_for(bb, panels)})
     return found
+
+
+@functools.lru_cache(maxsize=4)
+def _page(pdf_path: str, page_no: int = 0) -> pymupdf.Page:
+    """One open document per file: measuring dozens of glyphs must not re-open it each time."""
+    return pymupdf.open(pdf_path)[page_no]
+
+
+@functools.lru_cache(maxsize=4)
+def _rawdict(pdf_path: str, page_no: int = 0) -> list:
+    """Glyph-level text of the page, parsed once per file (parsing is the slow part)."""
+    return _page(pdf_path, page_no).get_text("rawdict")["blocks"]
+
+
+def ink_height(pdf_path: str | Path, bbox: BBox, dpi: int = 1200, page_no: int = 0) -> float | None:
+    """Height in points of the printed ink inside a box (e.g. one glyph).
+
+    Text boxes come from font metrics, which are taller than the letters, so
+    real size checks measure rendered pixels instead. Ink is any pixel clearly
+    different from the box's most common (background) colour.
+    """
+    page = _page(str(pdf_path), page_no)
+    pix = page.get_pixmap(dpi=dpi, clip=pymupdf.Rect(bbox.x0, bbox.y0, bbox.x1, bbox.y1), colorspace=pymupdf.csGRAY)
+    w, h, s = pix.width, pix.height, pix.samples
+    if not w or not h:
+        return None
+    bg = Counter(s).most_common(1)[0][0]
+    # map every grey level to 1 (ink) or 0 (background) once, then count per row at C speed
+    ink_map = bytes(1 if abs(v - bg) > 90 else 0 for v in range(256))
+    mask = s.translate(ink_map)
+    rows = []
+    for y in range(h):
+        inked = mask.count(1, y * w, (y + 1) * w)
+        # a row inked edge to edge is a rule line (e.g. Nutrition Facts bars), never part of a letter
+        if 0 < inked < 0.9 * w:
+            rows.append(y)
+    return (rows[-1] - rows[0] + 1) * 72 / dpi if rows else None
+
+
+def glyph_boxes(pdf_path: str | Path, line_bbox: BBox, chars: str, page_no: int = 0, text: str | None = None) -> list[BBox]:
+    """Boxes of the given characters in one text line (x from the font, y from the line).
+
+    Pass the line's text so characters from other text in the same spot
+    (hidden layers, overlapping copy) are not measured by mistake.
+    """
+    out = []
+    for block in _rawdict(str(pdf_path), page_no):
+        for line in block.get("lines", []):
+            if not line_bbox.contains(_bbox(line["bbox"]), tol=max(line_bbox.y1 - line_bbox.y0, 20)):
+                continue
+            line_text = "".join(c["c"] for sp in line["spans"] for c in sp["chars"])
+            if text and _squash(text) not in _squash(line_text) and _squash(line_text) not in _squash(text):
+                continue
+            for span in line["spans"]:
+                for ch in span["chars"]:
+                    b = _bbox(ch["bbox"])
+                    if ch["c"] in chars and line_bbox.contains(b, tol=1.5):
+                        # middle 60% only: kerned neighbours ("To") overlap the outer edges
+                        inset = (b.x1 - b.x0) * 0.2
+                        out.append(BBox(x0=b.x0 + inset, y0=b.y0, x1=b.x1 - inset, y1=b.y1))
+    return out
 
 
 def render_panel_png(pdf_path: str | Path, bbox: BBox, dpi: int = 110, page_no: int = 0) -> bytes:

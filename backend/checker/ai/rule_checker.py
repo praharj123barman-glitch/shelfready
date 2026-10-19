@@ -24,12 +24,14 @@ from ..rules import Rule
 from .client import AIError, generate_json, image_part
 
 RULES_PER_CALL = 8  # batching keeps the free tier's per-minute limit out of the way
-IMAGE_PANELS = ["front", "back", "left", "right", "top"]
+MAX_IMAGES = 9  # faces first, then flaps with artwork
 # at 110 dpi the model misread the recycling mark as "PAP 21"; small print needs more pixels
 IMAGE_DPI = 160
 
 SYSTEM = """You are a senior packaging compliance reviewer checking rules against one carton artwork.
 You get the artwork as extracted TEXT LINES (each with an id like L013) and as one IMAGE per panel.
+Faces (front, back, left, right) are what shoppers see on the shelf; the front face is the principal display panel.
+Flaps fold over or under when the carton is closed, so something only on a flap is NOT on the front panel.
 Logos, certification marks, symbols and barcodes are usually graphics, so look for them in the images, not the text.
 Work only from what you are given. Never use outside knowledge about this product.
 For every rule, cite evidence: either kind "text" with the line id and the exact words from that line,
@@ -45,7 +47,7 @@ class CitedEvidence(BaseModel):
     kind: Literal["text", "visual", "absent"]
     line_id: str | None = Field(default=None, description="for kind text: the line id, e.g. L013")
     quote: str | None = Field(default=None, description="for kind text: exact words copied from that line")
-    panel: str | None = Field(default=None, description="for kind visual: front, back, left, right or top")
+    panel: str | None = Field(default=None, description="for kind visual: the exact panel name from the IMAGE caption")
     description: str | None = Field(default=None, description="for kind visual: what is seen in the panel image")
     searched_for: list[str] = Field(
         default_factory=list,
@@ -91,9 +93,10 @@ def panel_images(ctx: CheckContext) -> list:
     if not ctx.art.path:
         return []
     parts = []
-    for name in IMAGE_PANELS:
-        if bb := ctx.art.panels.get(name):
-            parts += [f"IMAGE: {name} panel", image_part(render_panel_png(ctx.art.path, bb, dpi=IMAGE_DPI))]
+    names = sorted(ctx.art.content_panels or ctx.art.panels, key=lambda n: (" " in n, n))[:MAX_IMAGES]
+    for name in names:
+        kind = "flap (folds over or under when the carton is closed, not a face)" if " " in name else "face"
+        parts += [f"IMAGE: '{name}' ({kind})", image_part(render_panel_png(ctx.art.path, ctx.art.panels[name], dpi=IMAGE_DPI))]
     return parts
 
 

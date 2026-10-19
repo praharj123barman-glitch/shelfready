@@ -35,7 +35,7 @@ KNOWN_MARKS = {
 class Mark(BaseModel):
     name: str = Field(description="what the mark is, e.g. 'USDA Organic seal'")
     words_in_mark: str = Field(description="exact words printed inside the mark, '' if none")
-    panel: Literal["front", "back", "left", "right", "top"]
+    panel: str = Field(description="exact panel name from the IMAGE caption the mark is in")
     kind: Literal["certification", "recycling", "brand_logo", "barcode", "badge", "other"]
 
 
@@ -47,7 +47,8 @@ def inventory(ctx: CheckContext) -> list[Mark]:
     images = panel_images(ctx)
     if not images:
         raise AIError("No panel images available for this artwork")
-    return generate_json(["List every mark on these carton panels.", *images], MarkInventory, SYSTEM).marks
+    marks = generate_json(["List every mark on these carton panels.", *images], MarkInventory, SYSTEM).marks
+    return [m for m in marks if m.panel in ctx.art.panels]  # drop marks placed on a panel that does not exist
 
 
 def _canonical(mark: Mark) -> str | None:

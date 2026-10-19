@@ -96,6 +96,20 @@
       "text": "Net weight must be declared in avoirdupois ounces (and pounds where applicable) and in metric units, for example 'NET WT 16.9 OZ (480g)'."
     },
     {
+      "id": "FDA-101.2-TYPE",
+      "title": "Minimum type size for required information",
+      "citation": "21 CFR 101.2(c)",
+      "url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-B/part-101/subpart-A/section-101.2",
+      "text": "Required label information on the principal display panel and information panel must be prominent and conspicuous, and letters may not be less than 1/16 inch in height, measured on the lowercase letter 'o', unless an exemption applies (for example very small packages)."
+    },
+    {
+      "id": "FDA-101.105-HEIGHT",
+      "title": "Net quantity type height by display panel area",
+      "citation": "21 CFR 101.105(i)",
+      "url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-B/part-101/subpart-G/section-101.105",
+      "text": "The net quantity numbers must be at least: 1/16 inch tall for a principal display panel of 5 sq in or less; 1/8 inch for over 5 to 25 sq in; 3/16 inch for over 25 to 100 sq in; 1/4 inch for over 100 to 400 sq in; 1/2 inch above 400 sq in."
+    },
+    {
       "id": "FDCA-403w",
       "title": "Major food allergen declaration",
       "citation": "FD&C Act section 403(w) (FALCPA, FASTER Act)",

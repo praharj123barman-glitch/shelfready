@@ -53,6 +53,11 @@ seal is used, every organic ingredient is marked "Organic" in the ingredient
 list, and the certifying agent is named below the manufacturer statement
 ("Certified organic by ...").
 
+### DF-11 Folds and safe area
+Copy must not cross a fold (crease) line, and must stay inside the safe area
+marked on the dieline (the dashed artwork-panel line), so nothing is cut off,
+split across two faces or lost in the glue area.
+
 ### DF-10 Dieline print marks
 Dieline guide text ("Front panel", "Orientation", "Copy free") must be on a
 non-printing layer and must not overlap live copy.
