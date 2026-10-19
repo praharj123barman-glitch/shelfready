@@ -60,6 +60,7 @@ by verdict, then risk, so an allergen problem is never buried under a tagline.
 | **Feedback that sticks** | "False alarm, because..." waives that problem for that artwork file on later reviews (still listed, with the reason and an undo); on an AI finding the reason becomes guidance the AI reads next time |
 | **Follow-up questions** | Ask about any finding; answers use only the evidence and cite artwork lines, which are checked |
 | **Rule coverage** | Every rule supplied, and whether code, AI or nobody checked it |
+| **3D carton** | The dieline folded into a box from its own fold lines, rendered with the dieline layers switched off so it looks printed; issues are pins on the faces, click one to open it. Content on flaps hidden when closed is listed |
 
 ## What it finds on the Esko sample
 

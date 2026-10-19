@@ -119,6 +119,8 @@ export interface RunResponse {
   result: ReviewResult;
   comparison: Comparison | null;
   previous_image_url: string | null;
+  panels: Record<string, BBox>;
+  print_image_url: string | null;
 }
 
 export interface TextChange {

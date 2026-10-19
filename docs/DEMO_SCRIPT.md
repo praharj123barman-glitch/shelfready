@@ -25,6 +25,15 @@ Point at the three rule sources on the sample card.
 
 Click **Review the sample carton**.
 
+### 0:25 to 0:40 · The carton in 3D
+
+Click the **3D carton** tab, then **Right**.
+
+> First, the box as a shopper sees it, folded from the dieline's own fold lines. Every pin is an issue.
+> Here on the side, the Nutrition Facts panel is covered in them. Click a pin and you land on the finding.
+
+Click the **Findings** tab.
+
 ### 0:25 to 1:05 · The verdict and a definite finding
 
 > Not ready to launch. Twenty definite issues, ten likely, five for review, and seventeen checks that passed.

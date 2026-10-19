@@ -501,6 +501,30 @@ def render_panel_png(pdf_path: str | Path, bbox: BBox, dpi: int = 110, page_no: 
     return page.get_pixmap(dpi=dpi, clip=pymupdf.Rect(bbox.x0, bbox.y0, bbox.x1, bbox.y1)).tobytes("png")
 
 
+def render_print_png(pdf_path: str | Path, out_path: str | Path, dpi: int = 110, page_no: int = 0) -> bool:
+    """Render only what prints: dieline layers (cut, crease, dimensions, guides) switched off.
+    Returns False when the file has no layers to switch off (the normal render is then the print view)."""
+    doc = pymupdf.open(pdf_path)
+    configs = doc.layer_ui_configs()
+    # the viewer's layer switches (UI configs) are what rendering honours; the safe-area
+    # outline ("Artwork panel") does not print either
+    off = {c["number"] for c in configs if _is_structural_layer(c["text"]) or c["text"].strip().lower() == "artwork panel"}
+    if not off:
+        return False
+    # switching children off is not enough when their top-level group stays on, so also switch
+    # off every top-level group that contains a dieline layer (the DESIGN group has none)
+    group = None
+    for c in configs:
+        if c["depth"] == 0:
+            group = c["number"]
+        elif c["number"] in off and group is not None:
+            off.add(group)
+    for number in off:
+        doc.set_layer_ui_config(number, 2)  # 2 = off
+    doc[page_no].get_pixmap(dpi=dpi).save(str(out_path))
+    return True
+
+
 def render_png(pdf_path: str | Path, out_path: str | Path, dpi: int = 110, page_no: int = 0) -> tuple[int, int]:
     page = pymupdf.open(pdf_path)[page_no]
     pix = page.get_pixmap(dpi=dpi)

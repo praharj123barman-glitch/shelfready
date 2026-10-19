@@ -20,9 +20,10 @@ from pydantic import BaseModel, Field
 
 from checker.ai.chat import ChatAnswer, ChatTurn, answer_question
 from checker.ai.client import AIError, ai_available, model_name
-from checker.artwork import ArtworkError, read_artwork, render_png
+from checker.artwork import ArtworkError, read_artwork, render_png, render_print_png
 from checker.checks.base import CheckContext
 from checker.compare import Comparison, compare
+from checker.models import BBox
 from checker.content_sheet import SheetError, read_content_sheet
 from checker.feedback import FeedbackStore, record, remove_waiver
 from checker.feedback import load as load_feedback
@@ -64,6 +65,8 @@ class RunResponse(BaseModel):
     result: ReviewResult
     comparison: Comparison | None = None  # set when this run is a new proof compared with an earlier run
     previous_image_url: str | None = None
+    panels: dict[str, BBox] = Field(default_factory=dict, description="faces and flaps in PDF points, for the 3D carton")
+    print_image_url: str | None = Field(default=None, description="render with dieline layers off: what actually prints")
 
 
 class ChatRequest(BaseModel):
@@ -169,6 +172,7 @@ async def create_review(
 def _save_run(run_id, folder, art_path, sheet_path, rule_paths, result, comparison=None, previous=None) -> RunResponse:
     """Persist a finished review (inputs, result, rendered page) and build the response."""
     width, _ = render_png(art_path, folder / "artwork.png", dpi=RENDER_DPI)
+    has_print = render_print_png(art_path, folder / "print.png", dpi=RENDER_DPI)
     art = read_artwork(art_path)
     (folder / "result.json").write_text(result.model_dump_json(), encoding="utf-8")
     (folder / "inputs.json").write_text(json.dumps({
@@ -177,7 +181,8 @@ def _save_run(run_id, folder, art_path, sheet_path, rule_paths, result, comparis
     }), encoding="utf-8")
     return RunResponse(
         run_id=run_id, image_url=f"/api/runs/{run_id}/artwork.png", page_width=art.width, page_height=art.height,
-        image_scale=width / art.width, result=result, comparison=comparison,
+        image_scale=width / art.width, result=result, comparison=comparison, panels=art.panels,
+        print_image_url=f"/api/runs/{run_id}/print.png" if has_print else None,
         previous_image_url=f"/api/runs/{previous}/artwork.png" if previous else None,
     )
 
@@ -221,6 +226,14 @@ async def compare_proof(
 @app.get("/api/runs/{run_id}/artwork.png")
 def run_image(run_id: str):
     return FileResponse(_run_dir(run_id) / "artwork.png", media_type="image/png")
+
+
+@app.get("/api/runs/{run_id}/print.png")
+def run_print_image(run_id: str):
+    path = _run_dir(run_id) / "print.png"
+    if not path.exists():
+        raise HTTPException(404, "this artwork has no dieline layers, so there is no separate print view")
+    return FileResponse(path, media_type="image/png")
 
 
 @app.post("/api/runs/{run_id}/chat", response_model=ChatAnswer)

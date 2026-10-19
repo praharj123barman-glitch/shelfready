@@ -7,6 +7,7 @@ import type { Finding, RunResponse, Verdict } from "@/lib/types";
 import { RISKS, RISK_ORDER } from "@/lib/verdicts";
 import type { CompareInput } from "@/lib/api";
 import { ArtworkViewer } from "./ArtworkViewer";
+import { Carton3D } from "./Carton3D";
 import { ChangesView } from "./ChangesView";
 import { CoverageTable } from "./CoverageTable";
 import { FindingDetail } from "./FindingDetail";
@@ -20,7 +21,7 @@ export function ResultsScreen({ run, onBack, onCompare, error }: {
   const [selected, setSelected] = useState<Finding | null>(firstIssue);
   const [filter, setFilter] = useState<Verdict | "issues" | "all">("issues");
   const [method, setMethod] = useState<"all" | "deterministic" | "ai">("all");
-  const [tab, setTab] = useState<"findings" | "coverage" | "changes">(run.comparison ? "changes" : "findings");
+  const [tab, setTab] = useState<"findings" | "coverage" | "changes" | "carton">(run.comparison ? "changes" : "findings");
   const [comparing, setComparing] = useState(false);
   const s = report.summary;
 
@@ -73,10 +74,10 @@ export function ResultsScreen({ run, onBack, onCompare, error }: {
           </p>
         )}
         <nav className="flex flex-wrap items-center gap-1 px-5" aria-label="Result views">
-          {([...(run.comparison ? ["changes"] : []), "findings", "coverage"] as const).map((t) => (
+          {([...(run.comparison ? ["changes"] : []), "findings", "carton", "coverage"] as const).map((t) => (
             <button key={t} type="button" onClick={() => setTab(t as typeof tab)} aria-current={tab === t}
               className={`cursor-pointer border-b-2 px-3 py-2 text-sm font-medium ${tab === t ? "border-primary text-primary" : "border-transparent text-ink-muted hover:text-ink"}`}>
-              {t === "findings" ? "Findings" : t === "coverage" ? "Rule coverage" : "Changes since previous proof"}
+              {t === "findings" ? "Findings" : t === "coverage" ? "Rule coverage" : t === "carton" ? "3D carton" : "Changes since previous proof"}
             </button>
           ))}
           <div className="ml-auto flex items-center gap-2 py-1">
@@ -125,6 +126,14 @@ export function ResultsScreen({ run, onBack, onCompare, error }: {
               page={{ imageUrl: run.image_url, pageWidth: run.page_width, pageHeight: run.page_height }}
             />
           </div>
+        </main>
+      ) : tab === "carton" ? (
+        <main className="min-h-0 flex-1 p-3">
+          <Carton3D
+            imageUrl={run.print_image_url ?? run.image_url} pageWidth={run.page_width} pageHeight={run.page_height} panels={run.panels}
+            findings={report.findings}
+            onSelect={(f) => { setSelected(f); setFilter("issues"); setTab("findings"); }}
+          />
         </main>
       ) : tab === "coverage" ? (
         <main className="min-h-0 flex-1 p-3">
