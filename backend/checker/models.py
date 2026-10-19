@@ -94,6 +94,7 @@ class Finding(BaseModel):
     details: list[dict] = Field(default_factory=list)
     method: Literal["deterministic", "ai"] = "deterministic"
     confidence: float = 1.0
+    waiver: dict | None = None  # set when a reviewer marked this exact problem a false alarm
 
 
 class Artwork(BaseModel):

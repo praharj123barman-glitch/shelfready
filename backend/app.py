@@ -23,6 +23,8 @@ from checker.ai.client import AIError, ai_available, model_name
 from checker.artwork import ArtworkError, read_artwork, render_png
 from checker.checks.base import CheckContext
 from checker.content_sheet import SheetError, read_content_sheet
+from checker.feedback import FeedbackStore, record, remove_waiver
+from checker.feedback import load as load_feedback
 from checker.pipeline import ReviewResult, review
 from checker.rules import RuleError, RuleSet
 
@@ -183,10 +185,31 @@ def chat(run_id: str, req: ChatRequest) -> ChatAnswer:
 
 @app.post("/api/runs/{run_id}/feedback")
 def feedback(run_id: str, fb: Feedback) -> dict:
-    """Reviewer decisions are stored with the run; false alarms are kept as labelled
-    examples for improving the checks (they are not applied automatically)."""
+    """Accept, or mark a false alarm. A false alarm waives that problem on this
+    artwork for later reviews; on an AI finding with a reason it also becomes
+    guidance the AI reads next time. The response says exactly what changed."""
     folder = _run_dir(run_id)
-    log = folder / "feedback.jsonl"
-    with log.open("a", encoding="utf-8") as fh:
+    result = ReviewResult.model_validate_json((folder / "result.json").read_text(encoding="utf-8"))
+    finding = next((f for f in result.report.findings if f.id == fb.finding_id), None)
+    if finding is None:
+        raise HTTPException(404, f"finding {fb.finding_id} not in run {run_id}")
+    if fb.decision == "false_alarm" and finding.verdict.value == "pass":
+        raise HTTPException(400, "A passed check cannot be a false alarm")
+    inputs = json.loads((folder / "inputs.json").read_text(encoding="utf-8"))
+    with (folder / "feedback.jsonl").open("a", encoding="utf-8") as fh:  # audit trail per run
         fh.write(fb.model_dump_json() + "\n")
-    return {"saved": True}
+    return record(finding, fb.decision, fb.reason, folder / inputs["artwork"])
+
+
+@app.get("/api/feedback", response_model=FeedbackStore)
+def list_feedback() -> FeedbackStore:
+    return load_feedback()
+
+
+@app.delete("/api/waivers/{waiver_id}")
+def delete_waiver(waiver_id: str) -> dict:
+    if not waiver_id.isalnum():
+        raise HTTPException(400, "invalid waiver id")
+    if not remove_waiver(waiver_id):
+        raise HTTPException(404, f"waiver {waiver_id} not found")
+    return {"removed": True}

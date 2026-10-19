@@ -36,6 +36,21 @@ export interface Finding {
   details: Record<string, string>[];
   method: "deterministic" | "ai";
   confidence: number;
+  waiver: Waiver | null;
+}
+
+export interface Waiver {
+  id: string;
+  check: string;
+  problem: string;
+  reason: string;
+  created: string;
+}
+
+export interface FeedbackResult {
+  saved: boolean;
+  waiver: Waiver | null;
+  rule_note: { id: string; rule_id: string; note: string } | null;
 }
 
 export interface Report {
@@ -46,6 +61,7 @@ export interface Report {
   summary: Record<Verdict, number>;
   ready_to_launch: boolean;
   check_errors: string[];
+  waived: number;
 }
 
 export interface RuleSource {

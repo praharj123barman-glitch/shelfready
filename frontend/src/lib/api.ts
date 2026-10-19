@@ -1,4 +1,4 @@
-import type { ChatAnswer, ChatTurn, Health, RunResponse } from "./types";
+import type { ChatAnswer, ChatTurn, FeedbackResult, Health, RunResponse } from "./types";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -50,9 +50,13 @@ export function askAboutFinding(runId: string, findingId: string, question: stri
 }
 
 export function sendFeedback(runId: string, findingId: string, decision: "accepted" | "false_alarm", reason = "") {
-  return request<{ saved: boolean }>(`/api/runs/${runId}/feedback`, {
+  return request<FeedbackResult>(`/api/runs/${runId}/feedback`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ finding_id: findingId, decision, reason }),
   });
+}
+
+export function removeWaiver(waiverId: string) {
+  return request<{ removed: boolean }>(`/api/waivers/${waiverId}`, { method: "DELETE" });
 }

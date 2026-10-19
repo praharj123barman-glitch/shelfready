@@ -44,6 +44,7 @@ export function ResultsScreen({ run, onBack }: { run: RunResponse; onBack: () =>
           <p className="tabular text-sm text-ink-muted">
             <b className="text-definite">{s.definite}</b> definite · <b className="text-likely">{s.likely}</b> likely ·{" "}
             <b className="text-review">{s.review}</b> need review · <b className="text-pass">{s.pass}</b> passed
+            {report.waived > 0 && <> · {report.waived} waived</>}
           </p>
           {atStake.length > 0 && (
             <p className="text-xs text-ink-muted" aria-label="Issues to fix by risk">

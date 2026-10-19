@@ -3,8 +3,8 @@
 import { motion } from "framer-motion";
 import { Calculator, Check, FileSpreadsheet, Image as ImageIcon, Lightbulb, ScrollText, ThumbsDown } from "lucide-react";
 import { useState } from "react";
-import { sendFeedback } from "@/lib/api";
-import type { Evidence, Finding } from "@/lib/types";
+import { removeWaiver, sendFeedback } from "@/lib/api";
+import type { Evidence, FeedbackResult, Finding } from "@/lib/types";
 import { CATEGORY_LABELS, VERDICTS } from "@/lib/verdicts";
 import { ChatBox } from "./ChatBox";
 import { EvidenceCrop } from "./EvidenceCrop";
@@ -59,15 +59,33 @@ function DetailsTable({ rows }: { rows: Record<string, string>[] }) {
   );
 }
 
+function WaiverBanner({ finding }: { finding: Finding }) {
+  const [state, setState] = useState<"shown" | "removed" | "error">("shown");
+  if (!finding.waiver) return null;
+  if (state === "removed")
+    return <p className="rounded-lg bg-surface-muted p-3 text-sm text-ink-muted">Waiver removed. It will count again on the next review.</p>;
+  return (
+    <div className="rounded-lg border border-line bg-surface-muted p-3 text-sm">
+      <p className="font-semibold">Waived by a reviewer</p>
+      <p className="mt-0.5 text-ink-muted">&ldquo;{finding.waiver.reason}&rdquo; · {finding.waiver.created.slice(0, 10)}</p>
+      <p className="mt-1 text-xs text-ink-faint">Still listed for the record, but it no longer blocks the launch verdict.</p>
+      <button type="button" onClick={() => removeWaiver(finding.waiver!.id).then(() => setState("removed")).catch(() => setState("error"))}
+        className="mt-2 cursor-pointer text-sm font-medium text-primary hover:underline">Undo waiver</button>
+      {state === "error" && <p role="alert" className="mt-1 text-xs text-definite">Could not remove the waiver.</p>}
+    </div>
+  );
+}
+
 function Feedback({ runId, finding }: { runId: string; finding: Finding }) {
   const [state, setState] = useState<"idle" | "reason" | "saved" | "error">("idle");
   const [decision, setDecision] = useState<"accepted" | "false_alarm">("accepted");
   const [reason, setReason] = useState("");
+  const [result, setResult] = useState<FeedbackResult | null>(null);
 
   async function save(d: "accepted" | "false_alarm", why = "") {
     setDecision(d);
     try {
-      await sendFeedback(runId, finding.id, d, why);
+      setResult(await sendFeedback(runId, finding.id, d, why));
       setState("saved");
     } catch {
       setState("error");
@@ -75,7 +93,13 @@ function Feedback({ runId, finding }: { runId: string; finding: Finding }) {
   }
 
   if (state === "saved")
-    return <p className="flex items-center gap-1.5 text-sm text-pass"><Check className="size-4" /> Saved as {decision === "accepted" ? "accepted" : "false alarm"}.</p>;
+    return (
+      <div className="space-y-1 text-sm">
+        <p className="flex items-center gap-1.5 text-pass"><Check className="size-4" /> Saved as {decision === "accepted" ? "accepted" : "false alarm"}.</p>
+        {result?.waiver && <p className="text-ink-muted">Waived for this artwork on later reviews (you can undo it there).</p>}
+        {result?.rule_note && <p className="text-ink-muted">Your reason was saved as AI guidance for rule <span className="font-mono">{result.rule_note.rule_id}</span>, so the next review reads it.</p>}
+      </div>
+    );
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
@@ -160,7 +184,8 @@ export function FindingDetail({ runId, finding, page }: { runId: string; finding
               </p>
             )}
 
-            <Feedback key={`fb-${finding.id}`} runId={runId} finding={finding} />
+            <WaiverBanner key={`wv-${finding.id}`} finding={finding} />
+            {finding.verdict !== "pass" && !finding.waiver && <Feedback key={`fb-${finding.id}`} runId={runId} finding={finding} />}
             <ChatBox key={`chat-${finding.id}`} runId={runId} finding={finding} />
           </motion.article>
         )}

@@ -19,6 +19,8 @@ from .artwork import read_artwork
 from .checks.base import CheckContext
 from .content_sheet import read_content_sheet
 from .engine import Report, finalize, run_checks
+from .feedback import STORE as FEEDBACK_STORE
+from .feedback import apply_waivers, with_rule_notes
 from .models import Finding
 from .rules import RuleSet, load_regulation_pack, load_rulebook
 
@@ -71,7 +73,10 @@ def coverage_table(rules: RuleSet, findings: list[Finding], not_applicable: list
     return rows
 
 
-def review(artwork_path: Path, sheet_path: Path | None, rule_paths: list[Path], use_ai: bool = True) -> ReviewResult:
+def review(
+    artwork_path: Path, sheet_path: Path | None, rule_paths: list[Path], use_ai: bool = True,
+    feedback_store: Path = FEEDBACK_STORE,
+) -> ReviewResult:
     art = read_artwork(artwork_path)
     spec = read_content_sheet(sheet_path) if sheet_path else None
 
@@ -91,11 +96,13 @@ def review(artwork_path: Path, sheet_path: Path | None, rule_paths: list[Path], 
     note, not_applicable = None, []
     if ai_ran:
         MODELS_USED.clear()
-        ctx = CheckContext.build(art, rules, spec, first_id=len(report.findings) + 1)  # ids stay unique
-        rule_findings, not_applicable = check_rules(ctx, uncovered_rules(rules.rules, report.findings))
+        # the AI reads rules with any reviewer guidance from earlier false alarms appended
+        ctx = CheckContext.build(art, with_rule_notes(rules, feedback_store), spec, first_id=len(report.findings) + 1)
+        rule_findings, not_applicable = check_rules(ctx, uncovered_rules(ctx.rules.rules, report.findings))
         report = finalize(report, report.findings + rule_findings + check_marks(ctx))
     else:
         note = "AI checks did not run (no GEMINI_API_KEY or AI switched off). Only code checks are shown."
+    report = finalize(report, apply_waivers(report.findings, artwork_path, feedback_store))
     if ai_errors:
         note = "; ".join(filter(None, [note] + ai_errors))
     return ReviewResult(

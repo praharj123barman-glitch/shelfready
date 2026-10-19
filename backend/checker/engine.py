@@ -54,6 +54,7 @@ class Report(BaseModel):
     summary: dict[str, int]
     ready_to_launch: bool
     check_errors: list[str] = []
+    waived: int = 0  # findings a reviewer waived as false alarms (still listed)
 
 
 def run_checks(art: Artwork, rules: RuleSet, spec: ApprovedSpec | None) -> Report:
@@ -80,10 +81,15 @@ def run_checks(art: Artwork, rules: RuleSet, spec: ApprovedSpec | None) -> Repor
 
 def finalize(report: Report, findings: list[Finding]) -> Report:
     """Sort findings worst first (verdict, then risk) and recompute the summary and launch verdict."""
-    findings = sorted((assign_risk(f) for f in findings), key=lambda f: (VERDICT_ORDER[f.verdict], RISK_ORDER[f.risk], f.category))
-    counts = Counter(f.verdict.value for f in findings)
+    # waived findings sink to the end of their verdict group and stop counting toward the verdict
+    findings = sorted(
+        (assign_risk(f) for f in findings),
+        key=lambda f: (VERDICT_ORDER[f.verdict], f.waiver is not None, RISK_ORDER[f.risk], f.category),
+    )
+    counts = Counter(f.verdict.value for f in findings if f.waiver is None)
     return report.model_copy(update={
         "findings": findings,
+        "waived": sum(1 for f in findings if f.waiver is not None),
         "summary": {v.value: counts.get(v.value, 0) for v in Verdict},
         # an errored check means we did not look, which is not the same as a pass
         "ready_to_launch": counts.get("definite", 0) == 0 and counts.get("likely", 0) == 0 and not report.check_errors,

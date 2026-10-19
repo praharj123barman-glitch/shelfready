@@ -67,14 +67,15 @@ export function FindingsList({ findings, summary, filter, onFilter, method, onMe
               aria-current={selectedId === f.id}
               className={`flex w-full cursor-pointer flex-col gap-1.5 border-l-4 px-3 py-2.5 text-left transition-colors ${
                 selectedId === f.id ? "border-primary bg-primary-soft" : "border-transparent hover:bg-surface-muted"
-              }`}
+              } ${f.waiver ? "opacity-60" : ""}`}
             >
               <span className="flex items-start gap-2">
                 <VerdictBadge verdict={f.verdict} />
                 <span className="text-sm font-medium leading-snug text-ink">{f.title}</span>
               </span>
               <span className="flex flex-wrap items-center gap-2 pl-0.5 text-xs text-ink-faint">
-                {f.verdict !== "pass" && <RiskTag risk={f.risk} />}
+                {f.waiver && <span className="rounded border border-line px-1.5 py-0.5 text-xs font-semibold text-ink-faint">Waived</span>}
+                {f.verdict !== "pass" && !f.waiver && <RiskTag risk={f.risk} />}
                 <span>{CATEGORY_LABELS[f.category] ?? f.category}</span>
                 {f.rule_id && <span className="font-mono">{f.rule_id}</span>}
                 <MethodTag method={f.method} confidence={f.confidence} />
