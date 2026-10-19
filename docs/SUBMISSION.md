@@ -63,7 +63,7 @@ Attach `docs/architecture.png`. (The same diagram is in the README as Mermaid.)
 * **FastAPI + Pydantic:** API with explicit schemas and validated uploads.
 * **Next.js 16, React 19, Tailwind CSS 4, Framer Motion:** the review app, with evidence boxes drawn in PDF
   coordinates over the artwork.
-* **pytest:** 88 tests (math, parsing, AI guardrails, market switch, feedback loop, version compare, full sample run) and a mutation eval.
+* **pytest:** 96 tests (math, parsing, AI guardrails, market switch, feedback loop, version compare, robustness, full sample run) and a mutation eval.
 
 ## 4. Demo recording
 

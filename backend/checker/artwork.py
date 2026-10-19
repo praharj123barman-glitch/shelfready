@@ -102,7 +102,7 @@ def dieline_segments(page: pymupdf.Page, layer_word: str) -> list[tuple[float, f
     return segs
 
 
-def _panels_from_creases(page: pymupdf.Page, guide_lines: list[tuple[str, BBox]]) -> dict[str, BBox] | None:
+def _panels_from_creases(page: pymupdf.Page, guide_lines: list[tuple[str, BBox]], raw: list[dict]) -> dict[str, BBox] | None:
     """Faces are the cells between fold lines: the long horizontal creases bound
     the body, the vertical creases split it into faces, and what lies above or
     below each face is that face's top or bottom flap."""
@@ -123,7 +123,7 @@ def _panels_from_creases(page: pymupdf.Page, guide_lines: list[tuple[str, BBox]]
     top, bottom = horiz[0], horiz[-1]
     xs = sorted({round(x0) for x0, y0, x1, y1 in creases + cuts if abs(x0 - x1) < 1 and min(y0, y1) <= top + 1 and max(y0, y1) >= bottom - 1})
     cols = [(a, b) for a, b in zip(xs, xs[1:]) if b - a > 60]
-    names = _name_columns(page, cols, top, bottom, guide_lines)
+    names = _name_columns(raw, cols, top, bottom, guide_lines)
     panels: dict[str, BBox] = {}
     for (x0, x1), name in zip(cols, names):
         if not name:
@@ -139,7 +139,7 @@ def _panels_from_creases(page: pymupdf.Page, guide_lines: list[tuple[str, BBox]]
     return panels
 
 
-def _name_columns(page, cols, top, bottom, guide_lines) -> list[str | None]:
+def _name_columns(raw, cols, top, bottom, guide_lines) -> list[str | None]:
     """Name each body column. Guide labels ('Front panel') win; columns without
     one are named from geometry, because many dielines carry no such labels:
     the wide column with the largest type is the front, the other wide one the
@@ -155,12 +155,12 @@ def _name_columns(page, cols, top, bottom, guide_lines) -> list[str | None]:
     widths = [x1 - x0 for x0, x1 in cols]
     wide = max(widths) * 0.75 if widths else 0
     biggest: dict[int, float] = {}
-    for block in page.get_text("dict")["blocks"]:
-        for line in block.get("lines", []):
-            cx, cy = (line["bbox"][0] + line["bbox"][2]) / 2, (line["bbox"][1] + line["bbox"][3]) / 2
-            for i, (x0, x1) in enumerate(cols):
-                if x0 <= cx <= x1 and top <= cy <= bottom:
-                    biggest[i] = max(biggest.get(i, 0), max(s["size"] for s in line["spans"]))
+    for line in raw:
+        b = line["bbox"]
+        cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
+        for i, (x0, x1) in enumerate(cols):
+            if x0 <= cx <= x1 and top <= cy <= bottom:
+                biggest[i] = max(biggest.get(i, 0), line["size"])
     unnamed_wide = sorted((i for i, n in enumerate(names) if n is None and widths[i] >= wide), key=lambda i: -biggest.get(i, 0))
     for i in unnamed_wide:
         names[i] = next((n for n in ("front", "back") if n not in names), None)
@@ -170,10 +170,10 @@ def _name_columns(page, cols, top, bottom, guide_lines) -> list[str | None]:
     return names
 
 
-def _detect_panels(page: pymupdf.Page, guide_lines: list[tuple[str, BBox]]) -> dict[str, BBox]:
+def _detect_panels(page: pymupdf.Page, guide_lines: list[tuple[str, BBox]], raw: list[dict]) -> dict[str, BBox]:
     """Use the dieline fold lines when the file has them; otherwise fall back
     to the large filled panel shapes."""
-    return _panels_from_creases(page, guide_lines) or _panels_from_fills(page, guide_lines)
+    return _panels_from_creases(page, guide_lines, raw) or _panels_from_fills(page, guide_lines)
 
 
 def _panels_from_fills(page: pymupdf.Page, guide_lines: list[tuple[str, BBox]]) -> dict[str, BBox]:
@@ -190,7 +190,8 @@ def _panels_from_fills(page: pymupdf.Page, guide_lines: list[tuple[str, BBox]]) 
     ]
     tall = [r for r in fills if r.height > page.rect.height * 0.45]
     if not tall:
-        return {"page": _bbox(page.rect)}
+        # no dieline at all: a flat label, so the whole page is the principal display panel
+        return {"front": _bbox(page.rect)}
     top = min(r.y0 for r in tall)
     bottom = statistics.median(r.y1 for r in tall)
     xs = sorted({round(v) for r in fills for v in (r.x0, r.x1)})
@@ -297,17 +298,18 @@ def _open_page(pdf_path: Path, page_no: int) -> pymupdf.Page:
     if not pdf_path.exists():
         raise ArtworkError(f"Artwork file not found: {pdf_path.name}")
     try:
-        doc = pymupdf.open(pdf_path)
+        doc = pymupdf.open(stream=pdf_path.read_bytes(), filetype="pdf")
     except Exception as exc:  # pymupdf raises several internal types
-        raise ArtworkError(f"Could not open {pdf_path.name} as a PDF: {exc}") from exc
+        # the library message contains server paths: keep it on the exception chain, not in the reply
+        raise ArtworkError(f"Could not open {pdf_path.name}: the file is damaged or not a PDF.") from exc
     if page_no >= len(doc):
         raise ArtworkError(f"{pdf_path.name} has {len(doc)} page(s), page {page_no + 1} requested")
     return doc[page_no]
 
 
-def _raw_lines(page: pymupdf.Page) -> list[dict]:
+def _raw_lines(blocks: list) -> list[dict]:
     raw: list[dict] = []
-    for block in page.get_text("rawdict")["blocks"]:
+    for block in blocks:
         if block.get("type") != 0:
             continue
         for line in block["lines"]:
@@ -377,17 +379,35 @@ def _hidden_checker(page: pymupdf.Page):
     return check
 
 
+def _stamp(path: Path) -> tuple[int, int]:
+    st = path.stat()
+    return st.st_mtime_ns, st.st_size
+
+
 def read_artwork(pdf_path: str | Path, page_no: int = 0) -> Artwork:
+    """Read an artwork PDF. Results are cached per file version (path, size,
+    modification time), and a copy is returned so callers cannot share state."""
     pdf_path = Path(pdf_path)
+    if not pdf_path.exists():
+        raise ArtworkError(f"Artwork file not found: {pdf_path.name}")
+    return _read_artwork_cached(str(pdf_path), page_no, _stamp(pdf_path)).model_copy(deep=True)
+
+
+@functools.lru_cache(maxsize=8)
+def _read_artwork_cached(path: str, page_no: int, stamp: tuple[int, int]) -> Artwork:
+    pdf_path = Path(path)
     page = _open_page(pdf_path, page_no)
-    unique = _dedupe(_merge_curved(_raw_lines(page)))
+    page_count = len(page.parent)
+    blocks = _rawdict(path, page_no)
+    raw = _raw_lines(blocks)
+    unique = _dedupe(_merge_curved(raw))
     if not unique:
         raise ArtworkError(
             f"{pdf_path.name} has no live text. Outlined or scanned artwork needs OCR, which this prototype does not do yet."
         )
 
     guide_lines = [(r["text"], _bbox(r["bbox"])) for r in unique if _is_guide(r["text"])]
-    panels = _detect_panels(page, guide_lines)
+    panels = _detect_panels(page, guide_lines, raw)
     is_hidden = _hidden_checker(page)
 
     lines: list[TextLine] = []
@@ -416,6 +436,7 @@ def read_artwork(pdf_path: str | Path, page_no: int = 0) -> Artwork:
         height=page.rect.height,
         panels=panels,
         content_panels=_content_panels(page, panels, lines),
+        page_count=page_count,
         lines=lines,
         barcodes=read_barcodes(page, panels),
     )
@@ -435,15 +456,25 @@ def read_barcodes(page: pymupdf.Page, panels: dict[str, BBox], dpi: int = 300) -
     return found
 
 
-@functools.lru_cache(maxsize=4)
 def _page(pdf_path: str, page_no: int = 0) -> pymupdf.Page:
-    """One open document per file: measuring dozens of glyphs must not re-open it each time."""
-    return pymupdf.open(pdf_path)[page_no]
+    """One open document per file version: measuring dozens of glyphs must not re-open it each time."""
+    return _page_cached(pdf_path, page_no, _stamp(Path(pdf_path)))
 
 
-@functools.lru_cache(maxsize=4)
+@functools.lru_cache(maxsize=8)
+def _page_cached(pdf_path: str, page_no: int, stamp: tuple[int, int]) -> pymupdf.Page:
+    # opened from bytes: a cached document must not hold a file lock (Windows would block
+    # rewriting or deleting the file while the server runs)
+    return pymupdf.open(stream=Path(pdf_path).read_bytes(), filetype="pdf")[page_no]
+
+
 def _rawdict(pdf_path: str, page_no: int = 0) -> list:
-    """Glyph-level text of the page, parsed once per file (parsing is the slow part)."""
+    """Glyph-level text of the page, parsed once per file version (parsing is the slow part)."""
+    return _rawdict_cached(pdf_path, page_no, _stamp(Path(pdf_path)))
+
+
+@functools.lru_cache(maxsize=8)
+def _rawdict_cached(pdf_path: str, page_no: int, stamp: tuple[int, int]) -> list:
     return _page(pdf_path, page_no).get_text("rawdict")["blocks"]
 
 

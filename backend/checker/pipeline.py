@@ -107,6 +107,8 @@ def review(
     report = finalize(report, apply_waivers(report.findings, artwork_path, feedback_store))
     nf = read_nutrition_panel(art) if rules.get("FDA-101.9-DV") else None  # only meaningful under US rules
     corrected = corrected_panel(nf) if nf else None
+    if art.page_count > 1:
+        ai_errors.append(f"only page 1 of {art.page_count} was checked; review the other pages separately")
     if ai_errors:
         note = "; ".join(filter(None, [note] + ai_errors))
     return ReviewResult(

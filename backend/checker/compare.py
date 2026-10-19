@@ -96,7 +96,9 @@ def _key(f: Finding) -> tuple:
 
 def diff_issues(before: list[Finding], after: list[Finding]) -> list[IssueChange]:
     def problems(fs):
-        return {_key(f): f for f in fs if f.verdict.value in {"definite", "likely"} and f.waiver is None}
+        # waived problems are still the same problems: a waiver changing between proofs
+        # must not make a problem look introduced or resolved
+        return {_key(f): f for f in fs if f.verdict.value in {"definite", "likely"}}
 
     def change(status, f):
         return IssueChange(status=status, check=f.check, title=f.title, verdict=f.verdict.value, rule_id=f.rule_id, method=f.method)

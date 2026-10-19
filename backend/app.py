@@ -25,7 +25,7 @@ from checker.checks.base import CheckContext
 from checker.compare import Comparison, compare
 from checker.models import BBox
 from checker.content_sheet import SheetError, read_content_sheet
-from checker.feedback import FeedbackStore, record, remove_waiver
+from checker.feedback import FeedbackStore, carry_waivers, record, remove_waiver
 from checker.feedback import load as load_feedback
 from checker.pipeline import ReviewResult, review
 from checker.rules import RuleError, RuleSet
@@ -210,6 +210,7 @@ async def compare_proof(
             raise HTTPException(400, "Upload the new proof (PDF), or choose the generated sample v2")
         sheet_path = Path(shutil.copy(prev / inputs["sheet"], folder)) if inputs["sheet"] else None
         rule_paths = [Path(shutil.copy(prev / r, folder)) for r in inputs["rules"]]
+        carry_waivers(prev / inputs["artwork"], art_path)  # dismissed false alarms stay dismissed on the new proof
         result = review(art_path, sheet_path, rule_paths, use_ai=use_ai)
         before = ReviewResult.model_validate_json((prev / "result.json").read_text(encoding="utf-8"))
         comparison = compare(read_artwork(prev / inputs["artwork"]), read_artwork(art_path),

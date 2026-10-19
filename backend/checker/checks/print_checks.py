@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import functools
 import statistics
+from pathlib import Path
 
 import pymupdf
 
-from ..artwork import dieline_segments, glyph_boxes, ink_height
+from ..artwork import _stamp, dieline_segments, glyph_boxes, ink_height
 from ..models import BBox, Finding, TextLine, Verdict
 from ..sections import net_quantity_lines
 from .base import CheckContext, uses, art_evidence, computed, fmt
@@ -26,12 +27,13 @@ NET_QTY_HEIGHTS = [(5, 1 / 16), (25, 1 / 8), (100, 3 / 16), (400, 1 / 4), (float
 
 
 @functools.lru_cache(maxsize=16)
-def _segments_for(path: str, layer: str) -> tuple:
+def _segments_for(path: str, layer: str, stamp: tuple[int, int]) -> tuple:
     return tuple(dieline_segments(pymupdf.open(path)[0], layer))
 
 
 def _segments(ctx: CheckContext, layer: str):
-    return _segments_for(ctx.art.path, layer) if ctx.art.path else ()
+    # keyed on the file version too, so a rewritten file is not answered from cache
+    return _segments_for(ctx.art.path, layer, _stamp(Path(ctx.art.path))) if ctx.art.path else ()
 
 
 def _crosses(seg, bb: BBox, tol: float = FOLD_TOLERANCE) -> bool:

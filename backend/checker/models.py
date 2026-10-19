@@ -101,6 +101,7 @@ class Finding(BaseModel):
 class Artwork(BaseModel):
     file_name: str
     path: str | None = None  # local file, used to render panel images for the AI
+    page_count: int = 1  # only the first page is checked; more pages are reported, not skipped silently
     width: float
     height: float
     panels: dict[str, BBox]

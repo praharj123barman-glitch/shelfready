@@ -45,3 +45,12 @@ def test_identical_proofs_have_no_changes():
     art = read_artwork(V1)
     c = compare(art, art, [], [])
     assert c.text_changes == [] and c.issues == []
+
+
+def test_waiver_difference_is_not_an_introduced_issue():
+    from checker.models import Finding, Verdict
+
+    f = Finding(id="F1", check="gmo_wording", category="claims", verdict=Verdict.LIKELY, title="'GMO Free' wording is used", explanation="x")
+    waived = f.model_copy(update={"waiver": {"reason": "ok"}})
+    from checker.compare import diff_issues
+    assert [i.status for i in diff_issues([waived], [f])] == ["still_open"]

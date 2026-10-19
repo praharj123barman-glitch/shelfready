@@ -4,6 +4,20 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000
 
 export class ApiError extends Error {}
 
+/** FastAPI sends a string for our own errors and a list for validation errors. */
+function errorMessage(detail: unknown, status: number): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail) && detail.length) {
+    return detail
+      .map((d) => {
+        const field = Array.isArray(d?.loc) ? d.loc[d.loc.length - 1] : "input";
+        return `${field}: ${d?.msg ?? "invalid value"}`;
+      })
+      .join("; ");
+  }
+  return `Request failed (${status})`;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
@@ -13,8 +27,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    const detail = typeof body?.detail === "string" ? body.detail : `Request failed (${res.status})`;
-    throw new ApiError(detail);
+    throw new ApiError(errorMessage(body?.detail, res.status));
   }
   return res.json() as Promise<T>;
 }

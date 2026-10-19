@@ -98,6 +98,26 @@ def record(finding: Finding, decision: str, reason: str, artwork_path: Path, sto
         return {"saved": True, "waiver": waiver.model_dump(), "rule_note": note.model_dump() if note else None}
 
 
+def carry_waivers(previous_artwork: Path, new_artwork: Path, store: Path = STORE) -> int:
+    """A new proof of the same job keeps the reviewer's waivers: a false alarm
+    dismissed on v1 should not come back on v2. Returns how many were carried."""
+    old_sha, new_sha = file_sha256(previous_artwork), file_sha256(new_artwork)
+    if old_sha == new_sha:
+        return 0
+    with _LOCK:
+        data = load(store)
+        existing = {(w.check, w.problem) for w in data.waivers if w.artwork_sha256 == new_sha}
+        carried = [
+            Waiver(artwork_sha256=new_sha, artwork_name=new_artwork.name, check=w.check, problem=w.problem,
+                   reason=f"{w.reason} (carried over from {w.artwork_name})")
+            for w in data.waivers
+            if w.artwork_sha256 == old_sha and (w.check, w.problem) not in existing
+        ]
+        data.waivers.extend(carried)
+        save(data, store)
+        return len(carried)
+
+
 def remove_waiver(waiver_id: str, store: Path = STORE) -> bool:
     with _LOCK:
         data = load(store)

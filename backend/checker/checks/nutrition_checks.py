@@ -50,6 +50,10 @@ def check_serving_size(ctx: CheckContext) -> list[Finding]:
     if has_metric and has_household:
         return [ctx.finding("serving_size", CAT, Verdict.PASS, f"Serving size '{text}' has household and metric units",
                             "Serving size is declared correctly.", rule_id="FDA-101.9-SERVING", evidence=[art_evidence(lines)])]
+    if not nf.serving_size_line_ids:
+        return [ctx.finding("serving_size", CAT, Verdict.DEFINITE, "No serving size declared",
+                            "The Nutrition Facts panel has no serving size line. FDA requires it, in a household measure and grams.",
+                            rule_id="FDA-101.9-SERVING", fix="Add 'Serving size 3/4 cup (60g)' (with the real values).")]
     missing = [n for n, ok in (("a household measure (e.g. '2/3 cup')", has_household), ("a metric amount in grams", has_metric)) if not ok]
     return [
         ctx.finding(

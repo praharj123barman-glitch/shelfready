@@ -220,7 +220,7 @@ Tests and eval:
 
 ```bash
 cd backend
-../.venv/Scripts/python -m pytest -q          # 88 tests: math, parsing, guardrails, markets, feedback, compare, full sample run
+../.venv/Scripts/python -m pytest -q          # 96 tests: math, parsing, guardrails, markets, feedback, compare, robustness, full sample run
 ../.venv/Scripts/python -m eval.run_eval      # mutation eval, writes eval/RESULTS.md
 ```
 

@@ -60,3 +60,17 @@ def test_accepting_does_not_waive(tmp_path):
     target = next(f for f in run(store).findings if f.check == "gmo_wording")
     record(target, "accepted", "", PDF, store)
     assert load(store).waivers == [] and run(store).waived == 0
+
+
+def test_waivers_carry_over_to_a_new_proof(tmp_path):
+    from checker.feedback import carry_waivers
+
+    store = tmp_path / "feedback.json"
+    v2 = ROOT / "samples" / "DancingFish_Granola_Berry_US_Carton_v2_GENERATED.pdf"
+    target = next(f for f in run(store).findings if f.check == "gmo_wording")
+    record(target, "false_alarm", "Legal approved", PDF, store)
+    assert carry_waivers(PDF, v2, store) == 1
+    assert carry_waivers(PDF, v2, store) == 0  # idempotent
+    report = review(v2, XLSX, RULES, use_ai=False, feedback_store=store).report
+    gmo = next(f for f in report.findings if f.check == "gmo_wording")
+    assert gmo.waiver and "carried over" in gmo.waiver["reason"]
