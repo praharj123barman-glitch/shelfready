@@ -1,0 +1,441 @@
+{
+  "summary": {
+    "detected": "16/16",
+    "repairs_recognised": "7/7",
+    "false_alarms": 0,
+    "mutations": 23
+  },
+  "baseline": {
+    "may_contain_ingredient": "definite",
+    "generic_nuts": "definite",
+    "no_added_sugar": "definite",
+    "vegan_ingredients": "definite",
+    "vegan_cholesterol": "definite",
+    "organic_certifier": "definite",
+    "eu_front_of_pack": "definite",
+    "text_dietary_information": "definite",
+    "ingredients_match": "definite",
+    "net_quantity_pdp": "definite",
+    "net_quantity_units": "definite",
+    "manufacturer": "definite",
+    "net_qty_height": "definite",
+    "serving_size": "definite",
+    "calories_atwater": "definite",
+    "rounding": "definite",
+    "daily_values": "definite",
+    "nf_vs_sheet": "definite",
+    "hidden": "definite",
+    "folds": "definite",
+    "gmo_wording": "likely",
+    "claims_approved": "likely",
+    "unapproved_copy": "likely",
+    "servings_math": "likely",
+    "added_sugars_zero": "likely",
+    "safe_area": "likely",
+    "type_size": "likely",
+    "eu_allergen_terms": "review",
+    "organic_ingredients": "review",
+    "sheet_ingredient_duplicates": "review",
+    "sheet_sugars_gt_carbs": "review",
+    "sheet_open_notes": "review",
+    "allergens_declared": "pass",
+    "text_storage_instructions": "pass",
+    "text_marketing_copy": "pass",
+    "text_allergen_information": "pass",
+    "ingredient_structure": "pass",
+    "identity": "pass",
+    "net_quantity_sheet": "pass",
+    "barcode": "pass",
+    "nf_present": "pass",
+    "subtotals": "pass",
+    "dieline_marks": "pass"
+  },
+  "results": [
+    {
+      "id": "D01",
+      "kind": "detect",
+      "description": "Storage text reworded ('cool' to 'warm')",
+      "outcomes": {
+        "text_storage_instructions": {
+          "wanted": "fail",
+          "before": "pass",
+          "after": "definite",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 7.4
+    },
+    {
+      "id": "D02",
+      "kind": "detect",
+      "description": "Marketing copy shortened",
+      "outcomes": {
+        "text_marketing_copy": {
+          "wanted": "fail",
+          "before": "pass",
+          "after": "definite",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 7.6
+    },
+    {
+      "id": "D03",
+      "kind": "detect",
+      "description": "Brazil nuts dropped from the allergen statement",
+      "outcomes": {
+        "text_allergen_information": {
+          "wanted": "fail",
+          "before": "pass",
+          "after": "definite",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 7.0
+    },
+    {
+      "id": "D04",
+      "kind": "detect",
+      "description": "Saturated fat raised so fats exceed total fat",
+      "outcomes": {
+        "subtotals": {
+          "wanted": "fail",
+          "before": "pass",
+          "after": "definite",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 10.4
+    },
+    {
+      "id": "D05",
+      "kind": "detect",
+      "description": "Trans fat raised so fats exceed total fat",
+      "outcomes": {
+        "subtotals": {
+          "wanted": "fail",
+          "before": "pass",
+          "after": "definite",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 9.0
+    },
+    {
+      "id": "D06",
+      "kind": "detect",
+      "description": "Total sugars larger than total carbohydrate",
+      "outcomes": {
+        "subtotals": {
+          "wanted": "fail",
+          "before": "pass",
+          "after": "definite",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 8.3
+    },
+    {
+      "id": "D07",
+      "kind": "detect",
+      "description": "%DV footnote removed",
+      "outcomes": {
+        "nf_present": {
+          "wanted": "fail",
+          "before": "pass",
+          "after": "likely",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 9.0
+    },
+    {
+      "id": "D08",
+      "kind": "detect",
+      "description": "Ingredient listed twice",
+      "outcomes": {
+        "ingredient_structure": {
+          "wanted": "fail",
+          "before": "pass",
+          "after": "definite",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 8.4
+    },
+    {
+      "id": "D09",
+      "kind": "detect",
+      "description": "Declared percentages out of descending order",
+      "outcomes": {
+        "ingredient_structure": {
+          "wanted": "fail",
+          "before": "pass",
+          "after": "definite",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 6.7
+    },
+    {
+      "id": "D10",
+      "kind": "detect",
+      "description": "Net weight declaration deleted",
+      "outcomes": {
+        "net_quantity": {
+          "wanted": "fail",
+          "before": null,
+          "after": "definite",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 7.2
+    },
+    {
+      "id": "D11",
+      "kind": "detect",
+      "description": "Unapproved 'GLUTEN FREE' claim added to the front",
+      "outcomes": {
+        "claims_approved": {
+          "wanted": "fail",
+          "before": "likely",
+          "after": "likely",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 7.8
+    },
+    {
+      "id": "D12",
+      "kind": "detect",
+      "description": "Statement of identity removed from the front",
+      "outcomes": {
+        "identity": {
+          "wanted": "fail",
+          "before": "pass",
+          "after": "definite",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 7.6
+    },
+    {
+      "id": "D13",
+      "kind": "detect",
+      "description": "Sheet UPC changed (barcode no longer matches)",
+      "outcomes": {
+        "barcode": {
+          "wanted": "fail",
+          "before": "pass",
+          "after": "definite",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 6.7
+    },
+    {
+      "id": "D14",
+      "kind": "detect",
+      "description": "Sheet net weight changed to 500g",
+      "outcomes": {
+        "net_quantity_sheet": {
+          "wanted": "fail",
+          "before": "pass",
+          "after": "definite",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 6.6
+    },
+    {
+      "id": "D15",
+      "kind": "detect",
+      "description": "Sheet storage text changed",
+      "outcomes": {
+        "text_storage_instructions": {
+          "wanted": "fail",
+          "before": "pass",
+          "after": "definite",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 7.9
+    },
+    {
+      "id": "D16",
+      "kind": "detect",
+      "description": "Copy pushed across the front/left fold",
+      "outcomes": {
+        "folds": {
+          "wanted": "fail",
+          "before": "definite",
+          "after": "definite",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 8.3
+    },
+    {
+      "id": "R01",
+      "kind": "repair",
+      "description": "Net weight added to the front in oz and g at legal size",
+      "outcomes": {
+        "net_quantity_pdp": {
+          "wanted": "pass",
+          "before": "definite",
+          "after": null,
+          "ok": true
+        },
+        "net_quantity_units": {
+          "wanted": "pass",
+          "before": "definite",
+          "after": null,
+          "ok": true
+        },
+        "net_qty_height": {
+          "wanted": "pass",
+          "before": "definite",
+          "after": "pass",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 8.6
+    },
+    {
+      "id": "R02",
+      "kind": "repair",
+      "description": "Manufacturer address added",
+      "outcomes": {
+        "manufacturer": {
+          "wanted": "pass",
+          "before": "definite",
+          "after": "pass",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 7.3
+    },
+    {
+      "id": "R03",
+      "kind": "repair",
+      "description": "Serving size given household and metric units",
+      "outcomes": {
+        "serving_size": {
+          "wanted": "pass",
+          "before": "definite",
+          "after": "pass",
+          "ok": true
+        },
+        "servings_math": {
+          "wanted": "pass",
+          "before": "likely",
+          "after": "pass",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 7.6
+    },
+    {
+      "id": "R04",
+      "kind": "repair",
+      "description": "Calories corrected to match the macronutrients",
+      "outcomes": {
+        "calories_atwater": {
+          "wanted": "pass",
+          "before": "definite",
+          "after": "pass",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 7.0
+    },
+    {
+      "id": "R05",
+      "kind": "repair",
+      "description": "Calories, sodium and potassium rounded the FDA way",
+      "outcomes": {
+        "rounding": {
+          "wanted": "pass",
+          "before": "definite",
+          "after": "pass",
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 6.7
+    },
+    {
+      "id": "R06",
+      "kind": "repair",
+      "description": "Duplicate sunflower seeds removed from the sheet",
+      "outcomes": {
+        "sheet_ingredient_duplicates": {
+          "wanted": "pass",
+          "before": "review",
+          "after": null,
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 6.5
+    },
+    {
+      "id": "R07",
+      "kind": "repair",
+      "description": "Sheet carbohydrate corrected to the artwork value",
+      "outcomes": {
+        "sheet_sugars_gt_carbs": {
+          "wanted": "pass",
+          "before": "review",
+          "after": null,
+          "ok": true
+        }
+      },
+      "caught": true,
+      "false_alarms": [],
+      "seconds": 6.8
+    }
+  ]
+}

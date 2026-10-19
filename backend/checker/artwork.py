@@ -123,14 +123,10 @@ def _panels_from_creases(page: pymupdf.Page, guide_lines: list[tuple[str, BBox]]
     top, bottom = horiz[0], horiz[-1]
     xs = sorted({round(x0) for x0, y0, x1, y1 in creases + cuts if abs(x0 - x1) < 1 and min(y0, y1) <= top + 1 and max(y0, y1) >= bottom - 1})
     cols = [(a, b) for a, b in zip(xs, xs[1:]) if b - a > 60]
+    names = _name_columns(page, cols, top, bottom, guide_lines)
     panels: dict[str, BBox] = {}
-    for x0, x1 in cols:
-        name = next(
-            (m.group(1).lower() for text, bb in guide_lines
-             if (m := re.match(r"(front|back|left|right) panel", text.strip(), re.I)) and x0 <= bb.cx <= x1 and top <= bb.cy <= bottom),
-            None,
-        )
-        if not name or name in panels:
+    for (x0, x1), name in zip(cols, names):
+        if not name:
             continue
         panels[name] = BBox(x0=x0, y0=top, x1=x1, y1=bottom)
         panels[f"{name} top flap"] = BBox(x0=x0, y0=0, x1=x1, y1=top)
@@ -141,6 +137,37 @@ def _panels_from_creases(page: pymupdf.Page, guide_lines: list[tuple[str, BBox]]
     if first > 5:
         panels["glue flap"] = BBox(x0=0, y0=top, x1=first, y1=bottom)
     return panels
+
+
+def _name_columns(page, cols, top, bottom, guide_lines) -> list[str | None]:
+    """Name each body column. Guide labels ('Front panel') win; columns without
+    one are named from geometry, because many dielines carry no such labels:
+    the wide column with the largest type is the front, the other wide one the
+    back, and narrow columns are the sides. The glue flap is too narrow to name."""
+    names: list[str | None] = []
+    for x0, x1 in cols:
+        names.append(next(
+            (m.group(1).lower() for text, bb in guide_lines
+             if (m := re.match(r"(front|back|left|right) panel", text.strip(), re.I)) and x0 <= bb.cx <= x1 and top <= bb.cy <= bottom),
+            None,
+        ))
+    names = [n if n and names.count(n) == 1 else None for n in names]
+    widths = [x1 - x0 for x0, x1 in cols]
+    wide = max(widths) * 0.75 if widths else 0
+    biggest: dict[int, float] = {}
+    for block in page.get_text("dict")["blocks"]:
+        for line in block.get("lines", []):
+            cx, cy = (line["bbox"][0] + line["bbox"][2]) / 2, (line["bbox"][1] + line["bbox"][3]) / 2
+            for i, (x0, x1) in enumerate(cols):
+                if x0 <= cx <= x1 and top <= cy <= bottom:
+                    biggest[i] = max(biggest.get(i, 0), max(s["size"] for s in line["spans"]))
+    unnamed_wide = sorted((i for i, n in enumerate(names) if n is None and widths[i] >= wide), key=lambda i: -biggest.get(i, 0))
+    for i in unnamed_wide:
+        names[i] = next((n for n in ("front", "back") if n not in names), None)
+    for i, n in enumerate(names):
+        if n is None and 0.3 * max(widths) < widths[i] < wide:
+            names[i] = next((s for s in ("left", "right") if s not in names), None)
+    return names
 
 
 def _detect_panels(page: pymupdf.Page, guide_lines: list[tuple[str, BBox]]) -> dict[str, BBox]:

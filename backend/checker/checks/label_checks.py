@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 
 from ..models import Evidence, Finding, Verdict
+from ..sections import net_quantity_lines
 from .base import CheckContext, art_evidence, fmt, sheet_evidence
 
 QTY = re.compile(r"^(?:net\s*wt\.?\s*)?(?P<num>\d+(?:\.\d+)?)\s*(?P<unit>g|kg|oz|lb|ml|l|fl\.?\s*oz)\b", re.I)
@@ -27,10 +28,9 @@ def check_statement_of_identity(ctx: CheckContext) -> list[Finding]:
 
 def _quantity_lines(ctx: CheckContext):
     out = []
-    for ln in ctx.art.copy_lines():
-        if m := QTY.match(ln.text.strip()):
-            if len(ln.text.strip()) <= 30:  # a declaration, not a sentence with a number in it
-                out.append((ln, float(m.group("num")), m.group("unit").lower()))
+    for ln in net_quantity_lines(ctx.art):
+        m = QTY.match(ln.text.strip())
+        out.append((ln, float(m.group("num")), m.group("unit").lower()))
     return out
 
 

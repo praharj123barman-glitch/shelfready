@@ -103,6 +103,30 @@ def nearby_text(art: Artwork, anchor: TextLine, radius: float = 40) -> list[Text
     ]
 
 
+QUANTITY = re.compile(r"^\s*(?:net\s*wt\.?\s*)?(?P<num>\d+(?:\.\d+)?)\s*(?P<unit>g|kg|oz|lb|ml|l|fl\.?\s*oz)\b", re.I)
+NUTRIENT_WORDS = re.compile(r"\b(fat|saturates?|sugars?|salt|sodium|protein|fib(re|er)|carb\w*|calories|energy|kcal|kj)\b", re.I)
+
+
+def net_quantity_lines(art: Artwork) -> list[TextLine]:
+    """Lines that declare the pack's net quantity, best first.
+
+    '3.8g' next to the word 'Fat' is a nutrient amount, not a net weight, so any
+    quantity with nutrient words beside it is skipped. 'NET WT' lines and the
+    front panel are preferred.
+    """
+    out = []
+    for ln in art.copy_lines():
+        text = ln.text.strip()
+        if not QUANTITY.match(text) or len(text) > 30:
+            continue
+        neighbours = [o for o in art.copy_lines(ln.panel) if o.id != ln.id
+                      and abs(o.bbox.cy - ln.bbox.cy) < 2.2 * ln.size and abs(o.bbox.cx - ln.bbox.cx) < 40]
+        if NUTRIENT_WORDS.search(text) or any(NUTRIENT_WORDS.search(o.text) for o in neighbours):
+            continue
+        out.append(ln)
+    return sorted(out, key=lambda l: ("net" not in l.text.lower(), l.panel != "front"))
+
+
 def split_ingredients(text: str) -> list[str]:
     """Split an ingredient statement on top-level commas (not inside brackets)."""
     body = re.sub(r"^\s*ingredients\s*:\s*", "", text, flags=re.I).strip().rstrip(".")

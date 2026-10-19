@@ -6,7 +6,7 @@ import difflib
 import re
 
 from ..models import Evidence, Finding, Verdict
-from ..sections import split_ingredients
+from ..sections import net_quantity_lines, split_ingredients
 from .base import CheckContext, art_evidence, block_evidence, sheet_evidence
 
 PCT = re.compile(r"\((\d+(?:\.\d+)?)%\)")
@@ -132,7 +132,9 @@ def check_unapproved_tagline(ctx: CheckContext) -> list[Finding]:
         return []
     approved = norm(" ".join(filter(None, [ctx.spec.value(k) for k in (
         "marketing_copy", "product_name", "legal_name_statement_of_identity", "front_back_panel_claims_certifications", "product_type")])))
-    big = [ln for ln in ctx.art.copy_lines() if ln.size >= 11 and len(ln.text.split()) >= 3]
+    # mandatory declarations (net quantity) are regulated copy, not taglines
+    declarations = {ln.id for ln in net_quantity_lines(ctx.art)}
+    big = [ln for ln in ctx.art.copy_lines() if ln.size >= 11 and len(ln.text.split()) >= 3 and ln.id not in declarations]
     odd = [ln for ln in big if norm(ln.text) not in approved and not any(norm(ln.text) in norm(m) for m in [ctx.spec.value("marketing_copy") or ""])]
     seen: dict[str, list] = {}
     for ln in odd:

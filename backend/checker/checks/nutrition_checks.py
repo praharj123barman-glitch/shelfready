@@ -6,6 +6,7 @@ import re
 
 from ..models import Evidence, Finding, Verdict
 from ..nutrition import DAILY_VALUES, NUTRIENT_NAMES, atwater_calories, expected_dv, expected_rounding
+from ..sections import net_quantity_lines
 from .base import CheckContext, art_evidence, computed, fmt
 
 CAT = "nutrition"
@@ -60,8 +61,8 @@ def check_serving_size(ctx: CheckContext) -> list[Finding]:
 
 
 def _net_grams(ctx: CheckContext) -> float | None:
-    for ln in ctx.art.copy_lines():
-        if m := re.fullmatch(r"(?:net\s*wt\.?\s*)?(\d+(?:\.\d+)?)\s*g", ln.text.strip(), re.I):
+    for ln in net_quantity_lines(ctx.art):
+        if m := re.search(r"(\d+(?:\.\d+)?)\s*g\b", ln.text, re.I):
             return float(m.group(1))
     return None
 
@@ -71,7 +72,9 @@ def check_servings_math(ctx: CheckContext) -> list[Finding]:
     if nf is None or nf.servings_per_container is None:
         return []
     net = _net_grams(ctx)
-    m = re.search(r"([\d.]+)\s*g?\b", nf.serving_size_text or "")
+    text = nf.serving_size_text or ""
+    # '3/4 cup (60g)': the grams are the metric amount; a bare '85' is read as grams
+    m = re.search(r"([\d.]+)\s*g\b", text) or re.fullmatch(r"\s*([\d.]+)\s*", text)
     if net is None or m is None:
         return [ctx.finding("servings_math", CAT, Verdict.REVIEW, "Could not verify servings per container",
                             "Net weight or serving size in grams was not found, so servings x serving size cannot be checked.",

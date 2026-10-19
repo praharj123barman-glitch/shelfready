@@ -242,6 +242,7 @@ CLAIM_VOCAB = {
     "oven baked": r"oven baked",
     "gmo free": r"gmo free",
     "high-grain": r"high[\s-]grain",
+    "gluten free": r"gluten[\s-]free",
 }
 
 

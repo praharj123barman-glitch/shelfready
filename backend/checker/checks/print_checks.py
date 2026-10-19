@@ -14,6 +14,7 @@ import pymupdf
 
 from ..artwork import dieline_segments, glyph_boxes, ink_height
 from ..models import BBox, Finding, TextLine, Verdict
+from ..sections import net_quantity_lines
 from .base import CheckContext, art_evidence, computed, fmt
 
 PT_PER_INCH = 72.0
@@ -149,8 +150,9 @@ def check_min_type_size(ctx: CheckContext) -> list[Finding]:
 
 def check_net_quantity_height(ctx: CheckContext) -> list[Finding]:
     front = ctx.art.panels.get("front")
-    qty = next((ln for ln in ctx.art.copy_lines() if ln.text.strip().lower().rstrip("g").replace(".", "").isdigit()
-                and ln.text.strip().lower().endswith(("g", "oz"))), None)
+    # best first: a NET WT line on the front panel is the one the law measures
+    candidates = net_quantity_lines(ctx.art)
+    qty = candidates[0] if candidates else None
     if front is None or qty is None or not ctx.art.path:
         return []
     area = (front.x1 - front.x0) * (front.y1 - front.y0) / PT_PER_INCH**2
