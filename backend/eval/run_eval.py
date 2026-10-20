@@ -84,7 +84,7 @@ def run() -> dict:
     results = []
     # a plain folder, not a TemporaryDirectory: Windows will not delete PDFs the
     # checker's page cache still has open
-    WORK.mkdir(exist_ok=True)
+    WORK.mkdir(parents=True, exist_ok=True)  # runs/ is not in git: a fresh clone has no such folder yet
     for m in MUTATIONS:
         pdf, xlsx = WORK / f"{m.id}.pdf", WORK / f"{m.id}.xlsx"
         pdf_edits = [e for e in m.edits if e.kind != "sheet"]

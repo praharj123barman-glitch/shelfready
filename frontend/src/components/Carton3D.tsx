@@ -66,6 +66,24 @@ function inside(b: BBox, r: BBox) {
   return cx >= r.x0 && cx <= r.x1 && cy >= r.y0 && cy <= r.y1;
 }
 
+const PIN_GAP_PX = 18; // pin is 16 px wide
+
+
+/** Several findings often cite the same line (e.g. the allergen statement), so their pins would sit
+ * exactly on top of each other and only the top one could be clicked. Pins closer than one pin width
+ * are laid out side by side, centred on their shared spot. Positions are percentages of the face. */
+function spreadOverlapping<P extends { left: number; top: number }>(pins: P[], faceW: number, faceH: number): P[] {
+  const clusters: P[][] = [];
+  for (const pin of pins) {
+    const near = clusters.find((c) =>
+      Math.abs(((c[0].left - pin.left) / 100) * faceW) < PIN_GAP_PX && Math.abs(((c[0].top - pin.top) / 100) * faceH) < PIN_GAP_PX);
+    if (near) near.push(pin);
+    else clusters.push([pin]);
+  }
+  const step = (PIN_GAP_PX / faceW) * 100;
+  return clusters.flatMap((c) => c.map((pin, i) => ({ ...pin, left: c[0].left + (i - (c.length - 1) / 2) * step, top: c[0].top })));
+}
+
 export function Carton3D({ imageUrl, pageWidth, pageHeight, panels, findings, onSelect }: Props) {
   const reduce = useReducedMotion();
   const rx = useMotionValue(VIEWS.Front[0]);
@@ -84,14 +102,15 @@ export function Carton3D({ imageUrl, pageWidth, pageHeight, panels, findings, on
   const issues = findings.filter((f) => f.verdict !== "pass" && !f.waiver);
   const pins = useMemo(() => {
     if (!built) return [];
-    return built.faces.flatMap((face) =>
-      issues.flatMap((f) => {
+    return built.faces.flatMap((face) => {
+      const r = face.rect;
+      const onFace = issues.flatMap((f) => {
         const ev = f.evidence.find((e) => e.bbox && (e.bbox.x1 - e.bbox.x0) * (e.bbox.y1 - e.bbox.y0) < PANEL_AREA && inside(e.bbox, face.rect));
         if (!ev?.bbox) return [];
-        const r = face.rect;
         return [{ face: face.name, f, left: (((ev.bbox.x0 + ev.bbox.x1) / 2 - r.x0) / (r.x1 - r.x0)) * 100, top: (((ev.bbox.y0 + ev.bbox.y1) / 2 - r.y0) / (r.y1 - r.y0)) * 100 }];
-      }),
-    );
+      });
+      return spreadOverlapping(onFace, face.w, face.h);
+    });
   }, [built, issues]);
 
   if (!built) {
@@ -103,7 +122,11 @@ export function Carton3D({ imageUrl, pageWidth, pageHeight, panels, findings, on
   const notOnBox = issues.filter((f) => !pinned.has(f.id) && f.evidence.some((e) => e.panel && e.bbox));
 
   function goTo(view: string) {
-    const [x, y] = VIEWS[view];
+    // Side buttons follow the dieline's own panel names, the words the findings use. Esko's sample
+    // labels the panel to the right of the front "Left panel"; folded, it sits on the box's right
+    // side, so "Left" must turn to wherever the face the dieline calls left actually is.
+    const named = built?.faces.find((f) => (f.name === "left" || f.name === "right") && f.label === view.toLowerCase());
+    const [x, y] = named ? VIEWS[named.name === "left" ? "Left" : "Right"] : VIEWS[view];
     const opts = reduce ? { duration: 0 } : { type: "spring" as const, stiffness: 80, damping: 18 };
     animate(rx, x, opts);
     animate(ry, y, opts);

@@ -7,10 +7,11 @@ can cite, and nothing else.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from ..artwork import render_panel_png
+from ..artwork import PDF_LOCK, render_panel_png
 from ..checks.base import CheckContext
+from ..models import Artwork
 from .client import GeminiClient
 
 # faces first, then flaps that carry artwork; more images cost quota for little gain
@@ -20,10 +21,27 @@ IMAGE_DPI = 160
 PANEL_ORDER = ["front", "back", "left", "right", "top", "bottom", "other"]
 
 
+def panel_crops(art: Artwork) -> list[tuple[str, bytes]]:
+    """(caption, PNG) per panel, faces before flaps. Uses PyMuPDF: call it holding PDF_LOCK
+    (or in the PDF worker process, see pdf_work.py)."""
+    if not art.path:
+        return []
+    crops = []
+    for name in sorted(art.content_panels or art.panels, key=lambda n: (" " in n, n))[:MAX_IMAGES]:
+        kind = "flap (folds over or under when the carton is closed, not a face)" if " " in name else "face"
+        crops.append((f"IMAGE: '{name}' ({kind})", render_panel_png(art.path, art.panels[name], dpi=IMAGE_DPI)))
+    return crops
+
+
 @dataclass
 class PromptMaterial:
+    """Share one instance between RuleJudge and MarkInspector so the panels are rendered once.
+    Pass `crops` when they were already rendered (e.g. by the PDF worker process)."""
+
     ctx: CheckContext
     client: GeminiClient
+    crops: list[tuple[str, bytes]] | None = None
+    _images: list | None = field(default=None, init=False, repr=False)
 
     def text_lines(self) -> str:
         """Every visible line as '[L013] text', grouped by panel, plus hidden text marked as such."""
@@ -48,14 +66,10 @@ class PromptMaterial:
         return (self.ctx.spec.value("country_of_market") if self.ctx.spec else None) or "unknown"
 
     def panel_images(self) -> list:
-        """Alternating caption and image parts, faces before flaps."""
-        art = self.ctx.art
-        if not art.path:
-            return []
-        parts: list = []
-        names = sorted(art.content_panels or art.panels, key=lambda n: (" " in n, n))[:MAX_IMAGES]
-        for name in names:
-            kind = "flap (folds over or under when the carton is closed, not a face)" if " " in name else "face"
-            png = render_panel_png(art.path, art.panels[name], dpi=IMAGE_DPI)
-            parts += [f"IMAGE: '{name}' ({kind})", self.client.image_part(png)]
-        return parts
+        """Alternating caption and image parts, faces before flaps. Rendered on first use, then reused."""
+        if self._images is None:
+            if self.crops is None:
+                with PDF_LOCK:
+                    self.crops = panel_crops(self.ctx.art)
+            self._images = [part for caption, png in self.crops for part in (caption, self.client.image_part(png))]
+        return self._images

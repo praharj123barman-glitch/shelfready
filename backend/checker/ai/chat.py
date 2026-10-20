@@ -8,6 +8,7 @@ do not exist, the reply says so and is marked as needing a human.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -32,8 +33,8 @@ class ChatAnswer(BaseModel):
 
 
 class ChatTurn(BaseModel):
-    role: str
-    text: str
+    role: Literal["user", "assistant"]  # anything else would let a client add its own instructions to the prompt
+    text: str = Field(max_length=20000)
 
 
 @dataclass

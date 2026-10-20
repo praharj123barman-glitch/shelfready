@@ -110,15 +110,21 @@ class FeedbackStore:
                 data.accepted.append({"check": finding.check, "problem": problem_key(finding.title), "rule_id": finding.rule_id})
                 self._save(data)
                 return {"saved": True, "waiver": None, "rule_note": None}
-            waiver = Waiver(
-                artwork_sha256=file_sha256(artwork), artwork_name=artwork.name, check=finding.check,
-                problem=problem_key(finding.title), reason=reason.strip() or "Marked as a false alarm by the reviewer",
-            )
-            data.waivers.append(waiver)
+            sha, problem = file_sha256(artwork), problem_key(finding.title)
+            why = reason.strip() or "Marked as a false alarm by the reviewer"
+            # one waiver per file and problem: a repeated click updates it, so a single undo removes it
+            waiver = next((w for w in data.waivers if (w.artwork_sha256, w.check, w.problem) == (sha, finding.check, problem)), None)
+            if waiver:
+                waiver.reason = why
+            else:
+                waiver = Waiver(artwork_sha256=sha, artwork_name=artwork.name, check=finding.check, problem=problem, reason=why)
+                data.waivers.append(waiver)
             note = None
             if finding.method == "ai" and finding.rule_id and reason.strip():
-                note = RuleNote(rule_id=finding.rule_id, note=reason.strip())
-                data.rule_notes.append(note)
+                note = next((n for n in data.rule_notes if (n.rule_id, n.note) == (finding.rule_id, reason.strip())), None)
+                if note is None:
+                    note = RuleNote(rule_id=finding.rule_id, note=reason.strip())
+                    data.rule_notes.append(note)
             self._save(data)
             return {"saved": True, "waiver": waiver.model_dump(), "rule_note": note.model_dump() if note else None}
 

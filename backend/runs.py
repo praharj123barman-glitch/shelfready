@@ -13,6 +13,8 @@ and two renders of the page (as drawn, and print-only). Chat, feedback and
 
 from __future__ import annotations
 
+import hashlib
+import os
 import shutil
 import uuid
 from collections.abc import Iterator
@@ -22,11 +24,13 @@ from pathlib import Path
 from fastapi import HTTPException, UploadFile
 from pydantic import BaseModel
 
+from api_models import RunView
 from checker.models import Finding
 from checker.pipeline import ReviewResult
 
 RUNS_DIR = Path(__file__).resolve().parent / "runs"
 MAX_UPLOAD_MB = 25
+RESERVED_NAMES = {"result.json", "inputs.json", "view.json", "artwork.png", "print.png", "feedback.jsonl"}  # the run's own files
 ALLOWED_SUFFIXES = {"artwork": {".pdf"}, "sheet": {".xlsx"}, "rules": {".json", ".md", ".txt"}}
 
 
@@ -87,8 +91,17 @@ class ReviewRun:
             raise HTTPException(413, f"{name} is larger than {MAX_UPLOAD_MB} MB")
         if not data:
             raise HTTPException(400, f"{name} is empty")
-        path = self.folder / Path(name).name.replace(" ", "_")  # .name drops any directory part
+        path = self._free_name(Path(name).name.replace(" ", "_"))  # .name drops any directory part
         path.write_bytes(data)
+        return path
+
+    def _free_name(self, name: str) -> Path:
+        """A path in the run folder that is not taken: two uploads with the same name (or one named like
+        the run's own files, e.g. inputs.json) must not overwrite each other."""
+        stem, suffix = Path(name).stem, Path(name).suffix
+        path, n = self.folder / name, 2
+        while path.exists() or path.name.lower() in RESERVED_NAMES:
+            path, n = self.folder / f"{stem}_{n}{suffix}", n + 1
         return path
 
     def add_copy(self, source: Path) -> Path:
@@ -134,9 +147,17 @@ class ReviewRun:
             raise HTTPException(404, f"finding {finding_id} not in run {self.run_id}")
         return found
 
-    def save(self, inputs: RunInputs, result: ReviewResult) -> None:
+    def view(self) -> RunView | None:
+        """Page info and comparison saved with the run (None for runs saved before view.json existed)."""
+        path = self.folder / "view.json"
+        return RunView.model_validate_json(path.read_text(encoding="utf-8")) if path.exists() else None
+
+    def save(self, inputs: RunInputs, result: ReviewResult, view: RunView | None = None) -> None:
         (self.folder / "inputs.json").write_text(inputs.model_dump_json(), encoding="utf-8")
-        self.result_path.write_text(result.model_dump_json(), encoding="utf-8")
+        if view is not None:
+            (self.folder / "view.json").write_text(view.model_dump_json(), encoding="utf-8")
+        self.result_path.write_text(result.model_dump_json(), encoding="utf-8")  # last: its presence marks a finished run
+        share_identical_files(self.folder)
 
     def url(self, file_name: str) -> str:
         return file_url(self.run_id, file_name)
@@ -145,3 +166,44 @@ class ReviewRun:
 def file_url(run_id: str, file_name: str) -> str:
     """Where the API serves a run's file."""
     return f"/api/runs/{run_id}/{file_name}"
+
+
+# ---------------- disk use ----------------
+#
+# Reviewing the same artwork again stores the same inputs and the same 4 MB page renders
+# again. Identical files are kept once in runs/_blobs and hard-linked into each run folder:
+# every folder still holds all its files, but the bytes are on disk once. Run folders are
+# never written after saving, so sharing is safe; the appendable feedback log is skipped.
+
+# feedback.jsonl is appended to; result.json and inputs.json stay plain files because a hard link
+# carries the first copy's modification time, and runs are ordered by when they were saved
+NOT_SHARED = {"feedback.jsonl", "result.json", "inputs.json", "view.json"}
+SHARE_MIN_BYTES = 64 * 1024  # small files are not worth a link
+
+
+def blobs_dir() -> Path:
+    return RUNS_DIR / "_blobs"
+
+
+def share_identical_files(folder: Path) -> int:
+    """Replace files in `folder` with hard links to one shared copy. Returns bytes saved."""
+    store = blobs_dir()
+    store.mkdir(parents=True, exist_ok=True)
+    saved = 0
+    for path in sorted(folder.iterdir()):
+        if not path.is_file() or path.name in NOT_SHARED or path.stat().st_size < SHARE_MIN_BYTES:
+            continue
+        blob = store / (hashlib.sha256(path.read_bytes()).hexdigest() + path.suffix.lower())
+        try:
+            if not blob.exists():
+                os.link(path, blob)  # first copy: the blob is this file
+                continue
+            if os.path.samefile(path, blob):
+                continue
+            tmp = path.with_name(path.name + ".linking")
+            os.link(blob, tmp)
+            tmp.replace(path)  # atomic: the run file is never missing
+            saved += blob.stat().st_size
+        except OSError:  # e.g. a filesystem without hard links: keep the plain copy
+            continue
+    return saved

@@ -16,7 +16,8 @@ import { FindingsList } from "./FindingsList";
 export function ResultsScreen({ run, onBack, onCompare, error }: {
   run: RunResponse; onBack: () => void; onCompare: (input: CompareInput) => void; error: string | null;
 }) {
-  const { report, ai_ran, ai_note, ai_models, coverage, rule_sources } = run.result;
+  const { report, ai_ran, ai_note, ai_models, coverage, rule_sources, timings } = run.result;
+  const stageList = timings ? Object.entries(timings).map(([stage, s]) => `${stage}: ${s.toFixed(2)} s`).join("\n") : "";
   const firstIssue = report.findings.find((f) => f.verdict !== "pass") ?? report.findings[0] ?? null;
   const [selected, setSelected] = useState<Finding | null>(firstIssue);
   const [filter, setFilter] = useState<Verdict | "issues" | "all">("issues");
@@ -65,6 +66,13 @@ export function ResultsScreen({ run, onBack, onCompare, error }: {
           <p className="ml-auto truncate text-xs text-ink-faint" title={report.artwork}>
             {report.artwork}{report.content_sheet ? ` vs ${report.content_sheet}` : ""}
             {ai_ran && ai_models.length > 0 && ` · AI: ${ai_models.join(", ")}`}
+            {timings?.total !== undefined && (
+              <span className="tabular" title={stageList}>
+                {` · checked in ${timings.total.toFixed(1)} s`}
+                {/* cached AI answers take ~0 s; the model label already says "(cached)" */}
+                {timings.ai !== undefined && timings.ai >= 0.1 && ` (AI ${timings.ai.toFixed(1)} s)`}
+              </span>
+            )}
           </p>
         </div>
         {(ai_note || !ai_ran || report.check_errors.length > 0) && (
@@ -123,7 +131,7 @@ export function ResultsScreen({ run, onBack, onCompare, error }: {
           <div className="min-h-[360px] lg:min-h-0">
             <FindingDetail
               runId={run.run_id} finding={selected} corrected={run.result.corrected_nutrition}
-              page={{ imageUrl: run.image_url, pageWidth: run.page_width, pageHeight: run.page_height }}
+              page={{ imageUrl: run.image_url, pageWidth: run.page_width, pageHeight: run.page_height, printImageUrl: run.print_image_url }}
             />
           </div>
         </main>

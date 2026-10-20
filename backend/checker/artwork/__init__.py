@@ -13,11 +13,11 @@ The rest of the checker imports from this package, not from the modules.
 """
 
 from .measure import glyph_boxes, ink_height
-from .pdf_file import ArtworkError, PdfFile
+from .pdf_file import PDF_LOCK, ArtworkError, PdfFile
 from .reader import read_artwork, read_barcodes
 from .render import render_panel_png, render_png, render_print_png
 
 __all__ = [
-    "ArtworkError", "PdfFile", "glyph_boxes", "ink_height", "read_artwork", "read_barcodes",
+    "PDF_LOCK", "ArtworkError", "PdfFile", "glyph_boxes", "ink_height", "read_artwork", "read_barcodes",
     "render_panel_png", "render_png", "render_print_png",
 ]

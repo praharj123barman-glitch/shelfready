@@ -6,6 +6,10 @@ person, and shows the evidence behind every finding.
 
 Built for **Esko AIForge 2026**, problem statement 2: *Is this Packaging Artwork ready to launch?*
 
+**Live demo: https://shelfready-check.vercel.app** (click *Review the sample carton*). The web app runs on
+Vercel; the checker service runs on the author's machine behind a Cloudflare tunnel, so if the page says it
+cannot reach the checker, run it locally (below).
+
 ![Results screen](docs/results.png)
 
 ## The problem, and our approach
@@ -62,10 +66,19 @@ by verdict, then risk, so an allergen problem is never buried under a tagline.
 | **Rule coverage** | Every rule supplied, and whether code, AI or nobody checked it |
 | **3D carton** | The dieline folded into a box from its own fold lines, rendered with the dieline layers switched off so it looks printed; issues are pins on the faces, click one to open it. Content on flaps hidden when closed is listed |
 
+| Corrected Nutrition Facts | 3D carton with issue pins |
+|---|---|
+| ![Corrected Nutrition Facts panel](docs/corrected_nf.png) | ![Folded carton with issue pins](docs/carton3d.png) |
+| **Compare a new proof** | **Rule coverage** |
+| ![Changes since the previous proof](docs/compare.png) | ![Rule coverage table](docs/coverage.png) |
+| **India market (FSSAI)** | **Start screen** |
+| ![India FSSAI review](docs/india.png) | ![Start screen](docs/start.png) |
+
 ## What it finds on the Esko sample
 
 On the Dancing Fish granola carton (US) with its content sheet, ShelfReady reports **20 definite, about 10 likely,
-5 for review and 17 passes** (the AI-judged part can vary slightly between runs). Highlights:
+6 for review and 16 passes** (the AI-judged part can vary slightly between runs; an AI pass that rests only on what
+the model says it saw in an image goes to review, because code cannot confirm images). Highlights:
 
 * **Nutrition Facts:** 166 kcal cannot come from 15 g fat, 66 g carbohydrate and 34 g protein (about 535 kcal);
   10 of the 11 printed %Daily Values are wrong; calories, sodium and potassium are not rounded the FDA way; serving size
@@ -127,7 +140,7 @@ flowchart TB
         CHAT[Follow-up questions]
     end
 
-    VER{{4 Verify in code<br/>quotes, absences, panels}}
+    VER{{4 Verify in code<br/>quotes, absences, panels;<br/>failed or image-only pass: review}}
     REP[Report<br/>verdict, evidence, rule, fix<br/>+ rule coverage table]
     UI[Web app<br/>artwork with evidence boxes,<br/>magnified crops, chat, feedback]
 
@@ -182,7 +195,9 @@ FDA's or FSSAI's "no added sugar"), so a finding cites whichever equivalent rule
 * **Verification in code.** Real examples from development: the AI said the brand logo was missing because it
   only searched the text, and its evidence failed verification; at low resolution it misread the recycling mark
   as "PAP 21". Both were caught; panel images are now rendered at 160 dpi and image-only evidence carries lower
-  confidence.
+  confidence. In runtime testing the AI passed a "must say *Please recycle this carton*" rule by describing an
+  image of different text on another panel; an AI pass now needs at least one citation code can verify, and
+  image-only passes go to a person.
 * **No silent gaps.** If a model is rate limited, the next model in the chain answers; if all fail, the rule is
   reported as "could not be checked automatically, a human must check this rule". If a check crashes, the
   report says so and the launch verdict cannot be "ready".
@@ -224,9 +239,13 @@ cd backend
 ../.venv/Scripts/python -m eval.run_eval      # mutation eval, writes eval/RESULTS.md
 ```
 
-A fresh AI review takes about 30 to 110 seconds on the free tier (longer when the primary model is out of
-quota and the fallback answers). Identical requests are answered from a local cache of earlier real model
-output, so a repeat review takes about 10 seconds.
+Measured on the sample (Windows laptop, free tier): a review with fresh AI calls takes about 13 to 30 seconds
+depending on which model answers; a first review whose AI answers are cached takes about 8 seconds; reviewing
+the same file again takes under a second, because the parsed PDF, renders and AI answers are reused (keyed on
+the file's content, never on its name). If every model is out of quota on `GEMINI_API_KEY`, an optional
+`GEMINI_FALLBACK_API_KEY` is tried next. PDF work runs in a separate worker process, so the server keeps
+responding during a review. Stored reviews share identical files on disk; `python -m manage_runs stats`
+shows disk use and `python -m manage_runs prune --keep 50` lists (and with `--yes` deletes) old runs.
 
 ## Limitations (honest list)
 
@@ -234,8 +253,26 @@ output, so a repeat review takes about 10 seconds.
 * The FDA rule pack is a core subset, paraphrased. Always confirm against the current eCFR before release.
 * Without dieline guide labels, left and right side panels cannot be told apart (front and back are found from
   geometry and type size).
-* Only single-page artwork PDFs are read. US and India rules are bundled; another market is a new rule pack.
+* Only the first page of an artwork PDF is checked; other pages are reported as not checked, and a PDF whose
+  artwork is on a later page is told so. US and India rules are bundled; another market is a new rule pack.
 * The company rulebook and retailer guidelines are demo documents written for this prototype.
+* AI verdicts can still vary between fresh runs. Requests use a fixed seed (in testing, 3 identical runs gave
+  the same 10 AI verdicts, against 2 of 10 changing without it) and identical requests are answered from the
+  cache, but the model only promises a best effort.
+* Tested in Chromium, Firefox and WebKit on Windows. The 3D carton could not be checked in WebKit there (that
+  build cannot draw CSS 3D at all); real Safari on a Mac is untested.
+
+## Deploying
+
+The backend needs a Python host that can install PyMuPDF and zxing-cpp wheels (Linux is fine). Start it with
+`uvicorn app:app --host 0.0.0.0 --port $PORT` from `backend/`, and set `GEMINI_API_KEY` (optionally
+`GEMINI_FALLBACK_API_KEY`) and `CORS_ORIGINS` to the frontend's URL. Build the frontend with
+`NEXT_PUBLIC_API_URL` set to the backend's URL. Reviews are stored on the server's disk (`backend/runs`), so on
+hosts with temporary disks they disappear on restart.
+
+The live demo uses `deploy/go_live.ps1`: it starts the API on this PC, opens a Cloudflare quick tunnel to it,
+and rebuilds the Vercel app with the tunnel's address. Run it again after a restart, since the tunnel address
+changes each time.
 
 ## Repository layout
 

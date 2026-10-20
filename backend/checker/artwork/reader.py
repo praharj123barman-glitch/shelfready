@@ -11,7 +11,6 @@ hidden under a shape.
 
 from __future__ import annotations
 
-import functools
 from pathlib import Path
 
 import pymupdf
@@ -22,42 +21,39 @@ from ..models import Artwork, BBox, TextLine
 from .guides import is_guide_line, is_guide_text
 from .hidden_text import HiddenTextDetector
 from .panels import PanelFinder, content_panels, panel_for
-from .pdf_file import ArtworkError, PdfFile, file_version
+from .pdf_file import ArtworkError, PdfFile
 from .text_lines import RawLine, TextAssembler
 
 
 def read_artwork(pdf_path: str | Path, page_no: int = 0) -> Artwork:
-    """Read an artwork PDF. Results are cached per file version, and each call
-    returns its own copy so callers cannot change each other's data."""
+    """Read an artwork PDF. Results are cached per file content (the same bytes
+    at another path, e.g. a new run folder, are not parsed again), and each call
+    returns its own copy, stamped with the path it was asked for."""
     pdf_path = Path(pdf_path)
-    if not pdf_path.exists():
-        raise ArtworkError(f"Artwork file not found: {pdf_path.name}")
-    return _read_version(str(pdf_path), page_no, file_version(pdf_path)).model_copy(deep=True)
-
-
-@functools.lru_cache(maxsize=8)
-def _read_version(path: str, page_no: int, version: tuple[int, int]) -> Artwork:
-    return ArtworkReader(PdfFile.open(path), page_no).read()
+    pdf = PdfFile.open(pdf_path)
+    if page_no not in pdf.artworks:
+        pdf.artworks[page_no] = ArtworkReader(pdf, page_no, pdf_path).read()
+    return pdf.artworks[page_no].model_copy(deep=True, update={"file_name": pdf_path.name, "path": str(pdf_path)})
 
 
 class ArtworkReader:
-    def __init__(self, pdf: PdfFile, page_no: int = 0) -> None:
+    def __init__(self, pdf: PdfFile, page_no: int = 0, path: Path | None = None) -> None:
         self.pdf = pdf
         self.page_no = page_no
         self.page = pdf.page(page_no)
+        self.path = path  # the path this reading was asked for (names in messages and in the Artwork)
+        self.name = path.name if path else pdf.name
 
     def read(self) -> Artwork:
         text = TextAssembler(self.pdf.glyphs(self.page_no))
         if not text.lines:
-            raise ArtworkError(
-                f"{self.pdf.name} has no live text. Outlined or scanned artwork needs OCR, which this prototype does not do yet."
-            )
+            raise ArtworkError(self._no_text_message())
         guide_lines = [(line.text, line.box) for line in text.lines if is_guide_text(line.text)]
         panels = PanelFinder(self.pdf, self.page_no, guide_lines, text.raw).find()
         lines = self._text_lines(text.lines, panels)
         return Artwork(
-            file_name=self.pdf.name,
-            path=str(self.pdf.path),
+            file_name=self.name,
+            path=str(self.path) if self.path else "",
             width=self.page.rect.width,
             height=self.page.rect.height,
             panels=panels,
@@ -66,6 +62,15 @@ class ArtworkReader:
             lines=lines,
             barcodes=read_barcodes(self.page, panels),
         )
+
+    def _no_text_message(self) -> str:
+        """Why there is nothing to check: the file has no text at all, or its text is on another page."""
+        with_text = [i + 1 for i in range(self.pdf.page_count)
+                     if i != self.page_no and self.pdf.page(i).get_text("text").strip()]
+        if with_text:
+            return (f"Page {self.page_no + 1} of {self.name} has no live text, but page {with_text[0]} does. "
+                    "Only the first page is checked: export the artwork page on its own and upload that.")
+        return f"{self.name} has no live text. Outlined or scanned artwork needs OCR, which this prototype does not do yet."
 
     def _text_lines(self, raw_lines: list[RawLine], panels: dict[str, BBox]) -> list[TextLine]:
         detector = HiddenTextDetector(self.page)
@@ -90,8 +95,9 @@ class ArtworkReader:
 
 def read_barcodes(page: pymupdf.Page, panels: dict[str, BBox], dpi: int = 300) -> list[dict]:
     """Decode every barcode on the rendered page, with its box and panel."""
-    pix = page.get_pixmap(dpi=dpi)
-    image = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+    # greyscale: zxing decodes brightness anyway; same results on every test PDF, about 20% faster
+    pix = page.get_pixmap(dpi=dpi, colorspace=pymupdf.csGRAY)
+    image = Image.frombytes("L", (pix.width, pix.height), pix.samples)
     points_per_pixel = 72 / dpi
     found = []
     for code in zxingcpp.read_barcodes(image):

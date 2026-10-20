@@ -137,10 +137,39 @@ loaded. There is no list to update and no market `if`.
 - Every citation goes through `EvidenceVerifier`. A quote must appear in the cited line, an absence claim is
   searched for on the named panel, and a visual citation must name a real panel. Failures downgrade to REVIEW
   and say why.
+- An AI PASS needs at least one citation code can verify (a quoted line or a checked absence). Code cannot
+  confirm what an image shows, so a pass resting only on images goes to REVIEW (`CODE_CHECKABLE` in
+  `rule_judge.py`). Image evidence may still support an issue (LIKELY): a false alarm costs a look, a false
+  pass can ship a defect.
 - Model errors become "could not be checked automatically" findings, never passes.
 - `GeminiClient` is the only code that calls the model. Its cache stores real model output keyed on the full
   request, and the result lists which models answered.
 - The tests in `tests/test_ai_guardrails.py` feed hand-made bad answers through this layer with no API calls.
+
+## Performance and monitoring
+
+- **Caching by content.** `PdfFile` keeps one open document per distinct file content (SHA-256), with its
+  parsed `Artwork` and PNG renders. Every run copies its files to a new folder, so keying on the path would
+  re-parse the same artwork on every review. At most 8 documents are kept (least recently used dropped).
+- **AI cache.** `ResponseCache` stores real model answers keyed on the full request (prompt, images, schema).
+- **Parallel AI.** Rule files load while the PDF is read; `RuleJudge` and `MarkInspector` run side by side and
+  share one `PromptMaterial` (panels rendered once). AI findings are numbered in a fixed order afterwards.
+- **PDF work in a separate process.** PyMuPDF holds Python's global lock during long native calls, which
+  paused the whole server. The API runs every PyMuPDF step (reading, code checks, rendering) in a worker
+  process (`checker/pdf_work.py`, `REVIEW_PROCESSES`, default 1); AI calls stay in the API process as threads.
+  The worker keeps its caches between jobs. With 2 or more workers, two users' PDF steps run in parallel,
+  but each worker has its own cache. Tests and the eval use `InlinePdfWork` (same steps, in-process, holding
+  `PDF_LOCK` because PyMuPDF is not thread-safe). A crashed worker fails one request and is replaced.
+- **Run storage.** Files that are identical across runs (inputs, 4 MB page renders) are stored once in
+  `runs/_blobs` and hard-linked into each run folder, so every folder stays complete. `python -m manage_runs`
+  shows disk use (`stats`), applies this to old runs (`share`) and deletes old runs only with
+  `prune --keep N --yes`.
+- **Model and key fallback.** `GeminiClient` tries each (key, model) route in order; one that refused in the
+  last 60 seconds goes to the back of the queue (it is still tried). Timeouts are enforced without waiting for
+  the stuck call.
+- **Monitoring.** `backend/monitoring.py` logs one line per request (request id, status, duration) and adds
+  `X-Request-ID` and `Server-Timing` headers. `GET /api/metrics/requests` lists recent requests (local callers
+  only). Each `ReviewResult` carries `timings` per stage, shown in the results header.
 
 ## Testing
 

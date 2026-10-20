@@ -81,10 +81,23 @@ def test_pass_without_evidence_is_downgraded(ctx):
 
 
 def test_visual_evidence_needs_a_real_panel(ctx):
-    ok = to_finding(ctx, RULE, answer("pass", CitedEvidence(kind="visual", panel="front", description="logo")))
-    bad = to_finding(ctx, RULE, answer("pass", CitedEvidence(kind="visual", panel="lid", description="logo")))
-    assert ok.verdict == Verdict.PASS and ok.confidence < 0.75  # image-only evidence carries lower confidence
+    seen = to_finding(ctx, RULE, answer("likely", CitedEvidence(kind="visual", panel="front", description="logo")))
+    bad = to_finding(ctx, RULE, answer("likely", CitedEvidence(kind="visual", panel="lid", description="logo")))
+    assert seen.verdict == Verdict.LIKELY and seen.confidence < 0.75  # image-only evidence carries lower confidence
     assert bad.verdict == Verdict.REVIEW
+
+
+def test_a_pass_from_images_only_goes_to_review(ctx):
+    # found live: a "Please recycle this carton" rule passed on an image of different text on another panel
+    f = to_finding(ctx, RULE, answer("pass", CitedEvidence(kind="visual", panel="left", description="recycling text")))
+    assert f.verdict == Verdict.REVIEW and "images only" in f.explanation
+
+
+def test_a_pass_with_a_verified_quote_stays_a_pass_even_with_images(ctx):
+    lid = line_id(ctx, "Store in a cool, dry place. Once")
+    f = to_finding(ctx, RULE, answer("pass", CitedEvidence(kind="visual", panel="back", description="storage text"),
+                                     CitedEvidence(kind="text", line_id=lid, quote="cool, dry place")))
+    assert f.verdict == Verdict.PASS
 
 
 def test_ai_cannot_be_definite(ctx):

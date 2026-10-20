@@ -1,4 +1,4 @@
-"""Opening an artwork PDF, once per file version.
+"""Opening an artwork PDF, once per distinct file content.
 
 Every part of the checker that needs the PDF (reading text, measuring glyphs,
 finding dieline lines) asks ``PdfFile.open(path)`` and gets the same shared
@@ -8,13 +8,20 @@ object, so a 40-check review parses the file once instead of 40 times.
 from __future__ import annotations
 
 import functools
+import hashlib
+import threading
+from collections import OrderedDict
 from pathlib import Path
 
 import pymupdf
 
-from ..models import BBox
+from ..models import Artwork, BBox
 
 Segment = tuple[float, float, float, float]  # x0, y0, x1, y1 in PDF points
+
+# PyMuPDF is not thread-safe and documents are shared, so code that may run
+# alongside other requests (the API's worker threads) holds this while using it
+PDF_LOCK = threading.RLock()
 
 
 class ArtworkError(ValueError):
@@ -33,27 +40,53 @@ def file_version(path: Path) -> tuple[int, int]:
     return stat.st_mtime_ns, stat.st_size
 
 
+def content_digest(path: Path) -> str:
+    """SHA-256 of the file's bytes, hashed once per file version (path, mtime, size)."""
+    return _digest_of_version(str(path), file_version(path))
+
+
+@functools.lru_cache(maxsize=64)
+def _digest_of_version(path: str, version: tuple[int, int]) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
 class PdfFile:
-    """One artwork PDF, opened once per file version and shared.
+    """One artwork PDF, opened once per distinct content and shared.
+
+    Shared by content, not by path: every review copies its files into a new
+    run folder, so the same artwork arrives at a new path each time. Identical
+    bytes are the same input, so they reuse one parsed document.
 
     Use ``PdfFile.open(path)``; the constructor is for the cache. The document
     is opened from bytes, so it never holds a file lock (Windows would block
     rewriting or deleting the file while the server runs).
     """
 
-    def __init__(self, path: Path, doc: pymupdf.Document) -> None:
-        self.path = path
-        self.name = path.name
+    def __init__(self, name: str, digest: str, doc: pymupdf.Document) -> None:
+        self.name = name  # file name it was first opened under (for messages)
+        self.digest = digest
         self.doc = doc
         self._glyphs: dict[int, list] = {}
         self._segments: dict[tuple[str, int], list[Segment]] = {}
+        self.artworks: dict[int, Artwork] = {}  # page -> parsed Artwork, filled by reader.read_artwork
+        self.renders: dict[tuple, tuple] = {}  # PNG renders, filled by render.py
 
     @classmethod
     def open(cls, path: str | Path) -> "PdfFile":
         path = Path(path)
         if not path.exists():
             raise ArtworkError(f"Artwork file not found: {path.name}")
-        return _open_version(str(path), file_version(path))
+        digest = content_digest(path)
+        with _OPEN_LOCK:
+            if digest in _OPEN:
+                _OPEN.move_to_end(digest)
+                return _OPEN[digest]
+        pdf = cls(path.name, digest, _open_document(path))
+        with _OPEN_LOCK:
+            _OPEN[digest] = pdf
+            while len(_OPEN) > MAX_OPEN_DOCUMENTS:
+                _OPEN.popitem(last=False)  # least recently used
+        return pdf
 
     @property
     def page_count(self) -> int:
@@ -79,14 +112,26 @@ class PdfFile:
         return self._segments[key]
 
 
-@functools.lru_cache(maxsize=8)
-def _open_version(path: str, version: tuple[int, int]) -> PdfFile:
+MAX_OPEN_DOCUMENTS = 8
+_OPEN: OrderedDict[str, PdfFile] = OrderedDict()  # content digest -> open document, least recently used first
+_OPEN_LOCK = threading.Lock()
+
+
+def clear_open_documents() -> None:
+    """Forget every open document (for measurements and tests)."""
+    with _OPEN_LOCK:
+        _OPEN.clear()
+
+
+def _open_document(path: Path) -> pymupdf.Document:
     try:
-        doc = pymupdf.open(stream=Path(path).read_bytes(), filetype="pdf")
+        doc = pymupdf.open(stream=path.read_bytes(), filetype="pdf")
     except Exception as exc:  # pymupdf raises several internal types
         # the library message contains server paths: keep it on the exception chain, not in the reply
-        raise ArtworkError(f"Could not open {Path(path).name}: the file is damaged or not a PDF.") from exc
-    return PdfFile(Path(path), doc)
+        raise ArtworkError(f"Could not open {path.name}: the file is damaged or not a PDF.") from exc
+    if doc.needs_pass:  # its text cannot be read without the password
+        raise ArtworkError(f"{path.name} is password-protected. Export it again without a password and upload that.")
+    return doc
 
 
 def _segments_on_layer(page: pymupdf.Page, layer_word: str) -> list[Segment]:

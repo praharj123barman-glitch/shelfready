@@ -7,7 +7,7 @@ Next.js 16 (App Router), React 19, Tailwind CSS 4, Framer Motion. It talks only 
 
 ```bash
 pnpm install
-pnpm dev                 # http://localhost:3000, expects the API on http://localhost:8000
+pnpm dev                 # http://localhost:3000, expects the API on http://127.0.0.1:8000
 ```
 
 Set `NEXT_PUBLIC_API_URL` if the API runs elsewhere. Production build: `pnpm build && pnpm start`.

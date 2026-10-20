@@ -70,6 +70,10 @@ class MarkInventory(BaseModel):
 class MarkInspector:
     ctx: CheckContext
     client: GeminiClient
+    material: PromptMaterial | None = None  # pass the pipeline's shared one to reuse its rendered panels
+
+    def __post_init__(self) -> None:
+        self.material = self.material or PromptMaterial(self.ctx, self.client)
 
     def inspect(self) -> list[Finding]:
         try:
@@ -83,7 +87,7 @@ class MarkInspector:
         return [self._inventory_finding(seals), *self._seal_findings(seals), *self._missing_required(marks)]
 
     def inventory(self) -> list[Mark]:
-        images = PromptMaterial(self.ctx, self.client).panel_images()
+        images = self.material.panel_images()
         if not images:
             raise AIError("No panel images available for this artwork")
         marks = self.client.generate_json(["List every mark on these carton panels.", *images], MarkInventory, SYSTEM).marks

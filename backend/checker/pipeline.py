@@ -13,26 +13,38 @@
 
 Code checks always run first; AI only adds to them. If AI is unavailable the
 review still completes, and the result says the AI part did not run.
+
+Speed: rule files (which may need an AI call) load while the PDF is read, and
+the two AI steps (rule judging, mark inventory) run side by side. They are
+independent: both only read the context, and the panel images are rendered
+once, with the code checks, before they start.
+
+Every PyMuPDF step goes through ``self.pdf`` (see pdf_work.py): in this
+process by default, or in a worker process when the API passes one.
 """
 
 from __future__ import annotations
 
 import logging
+import time
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 
 from pydantic import BaseModel
 
 from .ai.client import AIError, GeminiClient, default_client
 from .ai.marks import MarkInspector
+from .ai.prompt_material import PromptMaterial
 from .ai.rule_judge import RuleJudge, rules_without_code_checks
 from .ai.rulebook_reader import RulebookReader
-from .artwork import read_artwork
 from .checks.base import CheckContext
-from .content_sheet import ApprovedSpec, read_content_sheet
-from .engine import Report, run_checks
+from .content_sheet import ApprovedSpec
+from .engine import Report
 from .feedback import FeedbackStore
 from .models import Artwork, Finding
 from .nutrition import CorrectedPanel, corrected_panel, read_nutrition_panel
+from .pdf_work import InlinePdfWork, PdfWork
 from .rules import RuleSet, load_regulation_pack, load_rulebook
 
 log = logging.getLogger(__name__)
@@ -56,44 +68,71 @@ class ReviewResult(BaseModel):
     ai_note: str | None = None  # anything the reviewer should know about what was not checked
     ai_models: list[str] = []  # models that answered (cached answers say so)
     corrected_nutrition: CorrectedPanel | None = None  # US Nutrition Facts as the printed amounts require
+    timings: dict[str, float] = {}  # seconds per stage, measured on this run (wall clock)
+
+
+class StageTimer:
+    """Wall-clock seconds per named stage of one review."""
+
+    def __init__(self) -> None:
+        self.seconds: dict[str, float] = {}
+
+    @contextmanager
+    def stage(self, name: str):
+        start = time.perf_counter()
+        try:
+            yield
+        finally:
+            self.seconds[name] = round(time.perf_counter() - start, 2)
 
 
 class ReviewPipeline:
-    def __init__(self, client: GeminiClient | None = None, feedback: FeedbackStore | None = None) -> None:
+    def __init__(self, client: GeminiClient | None = None, feedback: FeedbackStore | None = None,
+                 pdf: PdfWork | None = None) -> None:
         self.client = client or default_client()
         self.feedback = feedback or FeedbackStore()
+        self.pdf = pdf or InlinePdfWork()
 
     def run(self, artwork_path: Path, sheet_path: Path | None, rule_paths: list[Path], use_ai: bool = True) -> ReviewResult:
         notes: list[str] = []
-        art = read_artwork(artwork_path)
-        spec = read_content_sheet(sheet_path) if sheet_path else None
-        rules, sources = self._load_rules(rule_paths or DEFAULT_RULES, notes)
-
-        report = run_checks(art, rules, spec)
+        timer = StageTimer()
         ai_ran = use_ai and self.client.available
-        not_applicable: list[str] = []
-        if ai_ran:
-            report, not_applicable = self._add_ai_findings(report, art, rules, spec)
-        else:
-            notes.insert(0, "AI checks did not run (no GEMINI_API_KEY or AI switched off). Only code checks are shown.")
-        report = report.with_findings(self.feedback.apply_waivers(report.findings, artwork_path))
+        self.client.reset_usage()  # before the rule files: reading a prose rulebook is AI use too
+        with timer.stage("total"):
+            with timer.stage("read_inputs"), ThreadPoolExecutor(max_workers=1) as pool:
+                # rule files may need an AI call (prose rulebooks); load them while the PDF is read
+                loading_rules = pool.submit(self._load_rules, rule_paths or DEFAULT_RULES, notes, ai_ran)
+                art, spec = self.pdf.read(artwork_path, sheet_path)
+                rules, sources = loading_rules.result()
 
-        if art.page_count > 1:
-            notes.append(f"only page 1 of {art.page_count} was checked; review the other pages separately")
+            checked = self.pdf.check(art, rules, spec, with_panels=ai_ran)
+            timer.seconds.update(checked.seconds)
+            report = checked.report
+            not_applicable: list[str] = []
+            if ai_ran:
+                report, not_applicable = self._add_ai_findings(report, art, rules, spec, checked.crops, timer)
+            else:
+                notes.insert(0, "AI checks did not run (no GEMINI_API_KEY or AI switched off). Only code checks are shown.")
+            report = report.with_findings(self.feedback.apply_waivers(report.findings, artwork_path))
+
+            if art.page_count > 1:
+                notes.append(f"only page 1 of {art.page_count} was checked; review the other pages separately")
+            corrected = self._corrected_nutrition(art, rules)
+        log.info("review of %s: %s", artwork_path.name, timer.seconds)
         return ReviewResult(
             report=report, rule_sources=sources, coverage=coverage_table(rules, report.findings, not_applicable),
             ai_ran=ai_ran, ai_note="; ".join(notes) or None,
             ai_models=sorted(self.client.models_used) if ai_ran else [],
-            corrected_nutrition=self._corrected_nutrition(art, rules),
+            corrected_nutrition=corrected, timings=timer.seconds,
         )
 
     # ---------------- steps ----------------
 
-    def _load_rules(self, paths: list[Path], notes: list[str]) -> tuple[RuleSet, list[RuleSource]]:
+    def _load_rules(self, paths: list[Path], notes: list[str], use_ai: bool) -> tuple[RuleSet, list[RuleSource]]:
         rules, sources = RuleSet(rules=[]), []
         for path in paths:
             try:
-                loaded, source = self._load_rule_file(path)
+                loaded, source = self._load_rule_file(path, use_ai)
             except AIError as exc:  # a prose rulebook needs AI to read it
                 notes.append(f"could not read rules from {path.name}: {exc}")
                 continue
@@ -101,7 +140,7 @@ class ReviewPipeline:
             sources.append(source)
         return rules, sources
 
-    def _load_rule_file(self, path: Path) -> tuple[RuleSet, RuleSource]:
+    def _load_rule_file(self, path: Path, use_ai: bool) -> tuple[RuleSet, RuleSource]:
         """JSON packs and '### ID' rulebooks are parsed exactly; any other text is read by AI."""
         if path.suffix.lower() == ".json":
             pack = load_regulation_pack(path)
@@ -110,18 +149,29 @@ class ReviewPipeline:
         book = load_rulebook(path)
         if book.rules:
             return book, RuleSource(name=book.rules[0].source_name, kind="company", rule_count=len(book.rules))
+        if not use_ai:  # switching AI off must mean no AI calls at all
+            raise AIError("it has no '### ID Title' rule headings, so only AI can read it, "
+                          "and AI is not available (switched off, or no GEMINI_API_KEY)")
         id_prefix = "".join(c for c in path.stem.upper() if c.isalpha())[:3] or "U"
         rules, dropped = RulebookReader(self.client).read(path.read_text(encoding="utf-8", errors="replace"), path.stem, id_prefix)
         return RuleSet(rules=rules), RuleSource(name=path.stem, kind="ai_extracted", rule_count=len(rules), dropped=dropped)
 
-    def _add_ai_findings(self, report: Report, art: Artwork, rules: RuleSet, spec: ApprovedSpec | None) -> tuple[Report, list[str]]:
-        self.client.reset_usage()
-        # the AI reads the rules with reviewer guidance from earlier false alarms appended;
-        # numbering continues after the code findings so every finding id stays unique
-        ctx = CheckContext.build(art, self.feedback.with_rule_notes(rules), spec, first_id=len(report.findings) + 1)
-        judgement = RuleJudge(ctx, self.client).judge(rules_without_code_checks(ctx.rules.rules, report.findings))
-        marks = MarkInspector(ctx, self.client).inspect()
-        return report.with_findings(report.findings + judgement.findings + marks), judgement.not_applicable
+    def _add_ai_findings(self, report: Report, art: Artwork, rules: RuleSet, spec: ApprovedSpec | None,
+                         crops: list[tuple[str, bytes]], timer: StageTimer) -> tuple[Report, list[str]]:
+        # the AI reads the rules with reviewer guidance from earlier false alarms appended
+        ctx = CheckContext.build(art, self.feedback.with_rule_notes(rules), spec)
+        material = PromptMaterial(ctx, self.client, crops=crops)  # panels already rendered with the code checks
+        uncovered = rules_without_code_checks(ctx.rules.rules, report.findings)
+        with timer.stage("ai"), ThreadPoolExecutor(max_workers=2) as pool:
+            judging = pool.submit(RuleJudge(ctx, self.client, material).judge, uncovered)
+            inspecting = pool.submit(MarkInspector(ctx, self.client, material).inspect)
+            judgement, marks = judging.result(), inspecting.result()
+        # number after the code findings, in a fixed order (rules, then marks), whichever thread finished first
+        ai_findings = [
+            f.model_copy(update={"id": f"F{len(report.findings) + i:03d}"})
+            for i, f in enumerate(judgement.findings + marks, start=1)
+        ]
+        return report.with_findings(report.findings + ai_findings), judgement.not_applicable
 
     @staticmethod
     def _corrected_nutrition(art: Artwork, rules: RuleSet) -> CorrectedPanel | None:

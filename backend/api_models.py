@@ -29,23 +29,29 @@ class SampleSet(BaseModel):
     rule_files: list[str]
 
 
-class RunResponse(BaseModel):
+class RunView(BaseModel):
+    """Everything about a finished run except the review result itself; stored as view.json so a run
+    can be reopened later (GET /api/runs/{id})."""
+
     run_id: str
     image_url: str
     page_width: float
     page_height: float
     image_scale: float = Field(description="image pixels per PDF point, for drawing evidence boxes")
-    result: ReviewResult
     comparison: Comparison | None = None  # set when this run is a new proof compared with an earlier run
     previous_image_url: str | None = None
     panels: dict[str, BBox] = Field(default_factory=dict, description="faces and flaps in PDF points, for the 3D carton")
     print_image_url: str | None = Field(default=None, description="render with dieline layers off: what actually prints")
 
 
+class RunResponse(RunView):
+    result: ReviewResult
+
+
 class ChatRequest(BaseModel):
     finding_id: str
     question: str = Field(min_length=2, max_length=1000)
-    history: list[ChatTurn] = Field(default_factory=list)
+    history: list[ChatTurn] = Field(default_factory=list, max_length=200)  # only the last few are used
 
 
 class FeedbackRequest(BaseModel):

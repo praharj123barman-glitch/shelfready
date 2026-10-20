@@ -2,7 +2,7 @@
 
 Three small classes with one job each:
 
-* ``AISettings``    what to call: API key, primary model, fallbacks, timeout (from .env)
+* ``AISettings``    what to call: API key(s), primary model, fallbacks, timeout (from .env)
 * ``ResponseCache`` real earlier answers stored on disk, so repeated requests
                     (demos, re-runs) do not spend free-tier quota
 * ``GeminiClient``  makes the call: structured JSON output, timeout, and moving to
@@ -22,6 +22,7 @@ import hashlib
 import json
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -57,6 +58,7 @@ class AISettings:
     primary_model: str = "gemini-2.5-flash"
     fallback_models: tuple[str, ...] = ()
     timeout_seconds: float = 60.0
+    fallback_api_key: str | None = None  # used when every model refuses on the first key
 
     @classmethod
     def from_env(cls) -> "AISettings":
@@ -67,12 +69,23 @@ class AISettings:
             primary_model=os.environ.get("GEMINI_MODEL", cls.primary_model),
             fallback_models=fallbacks,
             timeout_seconds=float(os.environ.get("AI_TIMEOUT_SECONDS", cls.timeout_seconds)),
+            fallback_api_key=os.environ.get("GEMINI_FALLBACK_API_KEY") or None,
         )
 
     @property
     def model_chain(self) -> list[str]:
         """Models to try, in order: the primary, then each distinct fallback."""
         return [self.primary_model] + [m for m in self.fallback_models if m != self.primary_model]
+
+    @property
+    def api_keys(self) -> list[str]:
+        """Keys to try, in order. Only their position is ever logged or shown, never the key."""
+        return [k for k in (self.api_key, self.fallback_api_key) if k]
+
+    @property
+    def routes(self) -> list[tuple[int, str]]:
+        """(key number, model) pairs in the order to try: every model on the first key, then on the second."""
+        return [(i, m) for i in range(len(self.api_keys)) for m in self.model_chain]
 
 
 @dataclass
@@ -110,9 +123,16 @@ class ResponseCache:
 
 
 # errors that mean "try another model", not "this request is wrong"
-RETRYABLE_ERRORS = ("429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "timed out")
+# (404: a model can exist for one key and not for another; 500/502/504: Google's side failed or timed out,
+# seen live as a 504 from gemini-flash-latest, which used to end the chain before the models that had quota)
+RETRYABLE_ERRORS = ("429", "500", "502", "503", "504", "404", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "NOT_FOUND",
+                    "INTERNAL", "DEADLINE_EXCEEDED", "timed out")
 # seconds to wait before one more round of the whole chain when every model refused
 ROUND_WAITS = (0, 15)
+# a model that just refused (quota, overload) is tried last for this long; per-minute
+# quotas reset within it, and a model out of daily quota costs one probe a minute, not one per call
+COOLDOWN_SECONDS = 60
+SEED = 7  # any fixed number; the model then makes a best effort to answer a repeated request the same way
 
 
 @dataclass
@@ -121,7 +141,9 @@ class GeminiClient:
     cache: ResponseCache = field(default_factory=ResponseCache)
     # models that actually answered since the last reset_usage(); cached answers say so
     models_used: set[str] = field(default_factory=set)
-    _sdk_client: Any = field(default=None, repr=False)
+    _sdk_clients: dict[int, Any] = field(default_factory=dict, repr=False)  # key number -> SDK client
+    _refused_until: dict[tuple[int, str], float] = field(default_factory=dict, repr=False)  # route -> monotonic time
+    _sdk_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     @property
     def available(self) -> bool:
@@ -162,16 +184,23 @@ class GeminiClient:
 
     # ---------------- internals ----------------
 
-    def _sdk(self):
-        # one long-lived SDK client: a throwaway one can be garbage collected and
-        # close its HTTP connection while a request is still in flight
-        if self._sdk_client is None:
-            if not self.settings.api_key:
-                raise AIError("GEMINI_API_KEY is not set. Add it to .env (see .env.example).")
-            from google import genai
+    def _sdk(self, key_number: int = 0):
+        # one long-lived SDK client per key: a throwaway one can be garbage collected and
+        # close its HTTP connection while a request is still in flight. The lock matters
+        # because the pipeline's AI steps run in parallel: two threads creating a client at
+        # once would replace one mid-request ("client has been closed").
+        with self._sdk_lock:
+            if key_number not in self._sdk_clients:
+                keys = self.settings.api_keys
+                if key_number >= len(keys):
+                    raise AIError("GEMINI_API_KEY is not set. Add it to .env (see .env.example).")
+                from google import genai
+                from google.genai import types
 
-            self._sdk_client = genai.Client(api_key=self.settings.api_key)
-        return self._sdk_client
+                # the HTTP timeout ends an abandoned request's thread too (see _call_once)
+                http = types.HttpOptions(timeout=int(self.settings.timeout_seconds * 1000))
+                self._sdk_clients[key_number] = genai.Client(api_key=keys[key_number], http_options=http)
+            return self._sdk_clients[key_number]
 
     @staticmethod
     def _config(schema: type[BaseModel], system: str, temperature: float):
@@ -179,36 +208,53 @@ class GeminiClient:
 
         return types.GenerateContentConfig(
             system_instruction=system, temperature=temperature, response_mime_type="application/json", response_schema=schema,
+            seed=SEED,  # best effort at the same answer for the same request (the cache makes repeats exact)
         )
 
     def _call_with_fallback(self, prompt, config):
-        """Quota or overload on one model moves straight to the next; when every
-        model refuses, wait once and go round again before giving up."""
+        """Quota or overload on one model moves straight to the next, then to the same
+        models on the fallback key; when every route refuses, wait once and go round
+        again before giving up. Returns (response, label of who answered)."""
+        if not self.settings.api_keys:  # say so plainly: with no routes the loop below would report "rate limited"
+            raise AIError("GEMINI_API_KEY is not set. Add it to .env (see .env.example).")
         last_error: AIError | None = None
         for wait in ROUND_WAITS:
             time.sleep(wait)
-            for model in self.settings.model_chain:
+            for key_number, model in self._routes_in_order():
+                label = model if key_number == 0 else f"{model} (key {key_number + 1})"
                 try:
-                    return self._call_once(prompt, config, model), model
+                    return self._call_once(prompt, config, model, key_number), label
                 except AIError as exc:
                     if not any(code in str(exc) for code in RETRYABLE_ERRORS):
                         raise
                     last_error = exc
-                    log.warning("%s unavailable (%s), trying next model", model, str(exc)[:60])
-        raise AIError(f"All models are rate limited or unavailable ({', '.join(self.settings.model_chain)}): {last_error}")
+                    self._refused_until[(key_number, model)] = time.monotonic() + COOLDOWN_SECONDS
+                    log.warning("%s unavailable (%s), trying next", label, str(exc)[:60])
+        keys = f" on {len(self.settings.api_keys)} keys" if len(self.settings.api_keys) > 1 else ""
+        # the last error says why (quota, overload, timeout): the summary must not guess
+        raise AIError(f"No model could answer{keys} ({', '.join(self.settings.model_chain)}); last error: {last_error}")
 
-    def _call_once(self, prompt, config, model: str):
+    def _routes_in_order(self) -> list[tuple[int, str]]:
+        """Every (key, model) route, with those that refused in the last minute moved to the end
+        (still tried, so a cooldown never makes a call fail that could have succeeded)."""
+        now = time.monotonic()
+        return sorted(self.settings.routes, key=lambda route: self._refused_until.get(route, 0) > now)
+
+    def _call_once(self, prompt, config, model: str, key_number: int = 0):
         timeout = self.settings.timeout_seconds
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(lambda: self._sdk().models.generate_content(model=model, contents=prompt, config=config))
-            try:
-                return future.result(timeout=timeout)
-            except concurrent.futures.TimeoutError as exc:
-                raise AIError(f"Model call timed out after {timeout:.0f}s") from exc
-            except AIError:
-                raise
-            except Exception as exc:
-                raise AIError(f"Model call failed: {type(exc).__name__}: {str(exc)[:200]}") from exc
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        future = pool.submit(lambda: self._sdk(key_number).models.generate_content(model=model, contents=prompt, config=config))
+        try:
+            return future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError as exc:
+            raise AIError(f"Model call timed out after {timeout:.0f}s") from exc
+        except AIError:
+            raise
+        except Exception as exc:
+            raise AIError(f"Model call failed: {type(exc).__name__}: {str(exc)[:200]}") from exc
+        finally:
+            # do not wait for a timed-out call: 'with ThreadPoolExecutor' would block here until it finished
+            pool.shutdown(wait=False)
 
 
 @functools.lru_cache(maxsize=1)

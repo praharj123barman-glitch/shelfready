@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 RULE_HEADING = re.compile(r"^#{2,4}\s+([A-Z][A-Z0-9]*-[A-Z0-9.\-]+)\s+(.+?)\s*$", re.M)
 
@@ -75,12 +75,20 @@ def load_regulation_pack(path: str | Path) -> RuleSet:
         raise RuleError(f"Rule pack not found: {path.name}") from exc
     except json.JSONDecodeError as exc:
         raise RuleError(f"Rule pack {path.name} is not valid JSON: {exc}") from exc
-    return RuleSet(
-        rules=[
-            Rule(source=data.get("source", "regulation"), source_name=data.get("name", path.stem), market=data.get("market"), **r)
-            for r in data.get("rules", [])
-        ]
-    )
+    # uploaded files can be any JSON: check the shape and say what is wrong instead of failing with a 500
+    if not isinstance(data, dict) or not isinstance(data.get("rules", []), list):
+        raise RuleError(f"Rule pack {path.name} must be a JSON object with a \"rules\" list (see rules/us_fda_food.json)")
+    common = {"source": data.get("source", "regulation"), "source_name": data.get("name", path.stem), "market": data.get("market")}
+    rules = []
+    for i, entry in enumerate(data.get("rules", []), start=1):
+        if not isinstance(entry, dict):
+            raise RuleError(f"Rule pack {path.name}: rule {i} must be an object with id, title and text")
+        try:
+            rules.append(Rule(**{**common, **entry}))
+        except ValidationError as exc:
+            problems = "; ".join(f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors()[:3])
+            raise RuleError(f"Rule pack {path.name}: rule {i} is invalid ({problems})") from exc
+    return RuleSet(rules=rules)
 
 
 def parse_markdown_rulebook(text: str, source_name: str) -> RuleSet:

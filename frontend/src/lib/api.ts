@@ -1,6 +1,8 @@
 import type { ChatAnswer, ChatTurn, FeedbackResult, Health, RunResponse } from "./types";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// 127.0.0.1, not localhost: uvicorn listens on IPv4 only, and browsers try IPv6 (::1) first
+// for "localhost", which cost about 300 ms on every new connection to the API
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 export class ApiError extends Error {}
 
@@ -57,6 +59,9 @@ export function runReview(input: ReviewInput): Promise<RunResponse> {
   }
   return request<RunResponse>("/api/review", { method: "POST", body: form });
 }
+
+/** A finished review again (after a page refresh), with the current waivers applied. */
+export const getRun = (runId: string) => request<RunResponse>(`/api/runs/${encodeURIComponent(runId)}`);
 
 export function askAboutFinding(runId: string, findingId: string, question: string, history: ChatTurn[]) {
   return request<ChatAnswer>(`/api/runs/${runId}/chat`, {

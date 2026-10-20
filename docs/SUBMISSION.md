@@ -23,7 +23,10 @@ ShelfReady answers "is this ready to launch?" with findings a reviewer can trust
    follow-up questions.
 4. Every AI answer is verified in code (quotes must exist in the cited line, "missing" claims are re-checked
    on the named panel). Failures are downgraded to Needs review with the reason shown; AI can never be
-   Definite.
+   Definite. An AI "pass" also needs evidence code can verify: code cannot confirm what an image shows, so a
+   pass that rests only on what the model says it saw in a picture goes to a person. (In testing the model
+   passed a "must say *Please recycle this carton*" rule by describing an image of different words on
+   another panel; this rule now catches that.)
 
 Every finding shows its evidence (a magnified crop of the artwork, the spreadsheet cell, or the calculation),
 the rule it was judged against, and a suggested fix. A rule coverage table shows which rules were checked by
@@ -31,7 +34,7 @@ code, by AI, or not at all.
 
 On the Esko sample it reports 20 definite issues (for example 166 kcal declared where the macronutrients give
 about 535, a "No Added Sugar" claim with honey, a vegan seal with honey, net weight only on the back, and a
-hidden EU nutrition table under the US panel), plus likely and review items and 17 verified passes.
+hidden EU nutrition table under the US panel), plus 10 likely, 6 for review and 16 verified passes.
 
 Built for daily review work: issues are ranked by risk (safety first); the market can be switched between US FDA
 and India FSSAI, and because checks run only when a rule they implement is loaded, the same carton gets
@@ -49,21 +52,28 @@ Attach `docs/architecture.png`. (The same diagram is in the README as Mermaid.)
 
 ## 3. AI models and technologies used
 
-* **Google Gemini 2.5 Flash** (primary), with **Gemini 3 Flash** and **Gemini 2.5 Flash Lite** as automatic
-  fallbacks when a model is rate limited or overloaded. Used multimodally: extracted text lines plus panel
-  images at 160 dpi. JSON schema output at temperature 0, so every claim is structured and checkable. Three
-  uses: turning a prose rulebook into rules (each rule's quote must exist in the document), judging rules no
-  code check covers, and an inventory of logos and certification marks. A grounded follow-up chat answers
-  questions about a finding and cites artwork lines, which are checked.
-* **Verification layer (Python):** quote, absence and panel checks on every AI answer; downgrade on failure.
+* **Google Gemini 2.5 Flash** (primary), with Gemini 3 Flash, Gemini Flash (latest) and the Flash Lite models
+  as automatic fallbacks when a model is out of quota, overloaded or times out (an optional second API key
+  is tried the same way). Used multimodally: extracted text lines plus panel images at 160 dpi. JSON schema
+  output at temperature 0 with a fixed seed, so every claim is structured and checkable and repeat runs agree
+  (measured: 0 of 10 AI verdicts changed over 3 runs, against 2 of 10 without the seed). Three uses: turning
+  a prose rulebook into rules (each rule's quote must exist in the document), judging rules no code check
+  covers, and an inventory of logos and certification marks. A grounded follow-up chat answers questions
+  about a finding, cites artwork lines (which are checked) and says when the documents cannot answer.
+* **Verification layer (Python):** quote, absence and panel checks on every AI answer; downgrade on failure;
+  an AI pass needs evidence code can verify. Model failures are reported as "could not be checked", never
+  as a pass.
 * **PyMuPDF:** live text with glyph boxes, optional content layers (dieline vs design), drawing sequence
   numbers (hidden text), rendering for crops and ink measurement.
 * **zxing-cpp:** barcode decoding; the GS1 check digit is verified in code.
 * **openpyxl:** content sheet with cell addresses for evidence.
-* **FastAPI + Pydantic:** API with explicit schemas and validated uploads.
+* **FastAPI + Pydantic:** API with explicit schemas and validated uploads; PDF work runs in a separate worker
+  process so the app stays responsive during a review.
 * **Next.js 16, React 19, Tailwind CSS 4, Framer Motion:** the review app, with evidence boxes drawn in PDF
-  coordinates over the artwork.
-* **pytest:** 96 tests (math, parsing, AI guardrails, market switch, feedback loop, version compare, robustness, full sample run) and a mutation eval.
+  coordinates over the artwork and a 3D carton folded from the dieline.
+* **Testing:** 136 pytest tests (math, parsing, AI guardrails including malformed and invented model output,
+  market switch, feedback loop, version compare, API errors, robustness, full sample run), a mutation eval,
+  and browser QA of every user journey in Chromium and Firefox.
 
 ## 4. Demo recording
 

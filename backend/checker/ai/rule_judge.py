@@ -22,6 +22,7 @@ from .client import AIError, GeminiClient
 from .evidence import CitedEvidence, EvidenceVerifier
 from .prompt_material import PromptMaterial
 
+CODE_CHECKABLE = {"text", "absent"}  # evidence kinds code can verify; 'visual' only proves the panel exists
 RULES_PER_CALL = 8  # batching keeps the free tier's per-minute limit out of the way
 
 # confidence shown in the UI for AI findings
@@ -76,15 +77,18 @@ def rules_without_code_checks(rules: list[Rule], findings: list[Finding]) -> lis
 class RuleJudge:
     ctx: CheckContext
     client: GeminiClient
+    material: PromptMaterial | None = None  # pass the pipeline's shared one to reuse its rendered panels
+
+    def __post_init__(self) -> None:
+        self.material = self.material or PromptMaterial(self.ctx, self.client)
 
     def judge(self, rules: list[Rule]) -> Judgement:
         result = Judgement()
         if not rules:
             return result
-        material = PromptMaterial(self.ctx, self.client)
-        images = material.panel_images()  # rendered once, reused for every batch
+        images = self.material.panel_images()  # rendered once, reused for every batch
         for start in range(0, len(rules), RULES_PER_CALL):
-            batch = self._judge_batch(rules[start:start + RULES_PER_CALL], material, images)
+            batch = self._judge_batch(rules[start:start + RULES_PER_CALL], self.material, images)
             result.findings += batch.findings
             result.not_applicable += batch.not_applicable
         return result
@@ -101,6 +105,12 @@ class RuleJudge:
             verdict = Verdict.REVIEW
             explanation += " [Downgraded to review: the AI's evidence did not check out against the artwork: " + (
                 "; ".join(problems) if problems else "no evidence cited") + ".]"
+        elif verdict == Verdict.PASS and not any(item.kind in CODE_CHECKABLE for item in verified):
+            # code can confirm that a quoted line exists or that words are absent, but not what an image
+            # shows; a pass resting only on images could hide a real defect, so a person decides
+            verdict = Verdict.REVIEW
+            explanation += (" [Sent to review: the AI judged this a pass from the panel images only, "
+                            "and code cannot confirm what an image shows. Please check it by eye.]")
         return self.ctx.finding(
             f"ai_rule_{rule.id}", "ai_rules", verdict, answer.title, explanation, rule_id=rule.id, fix=answer.fix,
             method="ai", confidence=self._confidence(verdict, verified),

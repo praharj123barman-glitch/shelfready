@@ -25,6 +25,13 @@ export interface PageImage {
   imageUrl: string;
   pageWidth: number;
   pageHeight: number;
+  printImageUrl?: string | null; // same page with the dieline guides off
+}
+
+/** Crops show the artwork as it prints: dieline guide text ("Left panel", "Orientation") otherwise sits on
+ * top of the copy being shown. Print-readiness findings (folds, safe area) keep the guides they are about. */
+function cropImage(page: PageImage, category: string): PageImage {
+  return page.printImageUrl && category !== "print_readiness" ? { ...page, imageUrl: page.printImageUrl } : page;
 }
 
 function EvidenceRow({ e, page, stroke }: { e: Evidence; page: PageImage; stroke: string }) {
@@ -65,8 +72,14 @@ function DetailsTable({ rows }: { rows: Record<string, string>[] }) {
 }
 
 function WaiverBanner({ finding }: { finding: Finding }) {
-  const [state, setState] = useState<"shown" | "removed" | "error">("shown");
+  const [state, setState] = useState<"shown" | "removing" | "removed" | "error">("shown");
   if (!finding.waiver) return null;
+  const waiverId = finding.waiver.id;
+  function undo() {
+    if (state === "removing") return; // a second click would get "not found" and show a false error
+    setState("removing");
+    removeWaiver(waiverId).then(() => setState("removed")).catch(() => setState("error"));
+  }
   if (state === "removed")
     return <p className="rounded-lg bg-surface-muted p-3 text-sm text-ink-muted">Waiver removed. It will count again on the next review.</p>;
   return (
@@ -74,8 +87,10 @@ function WaiverBanner({ finding }: { finding: Finding }) {
       <p className="font-semibold">Waived by a reviewer</p>
       <p className="mt-0.5 text-ink-muted">&ldquo;{finding.waiver.reason}&rdquo; · {finding.waiver.created.slice(0, 10)}</p>
       <p className="mt-1 text-xs text-ink-faint">Still listed for the record, but it no longer blocks the launch verdict.</p>
-      <button type="button" onClick={() => removeWaiver(finding.waiver!.id).then(() => setState("removed")).catch(() => setState("error"))}
-        className="mt-2 cursor-pointer text-sm font-medium text-primary hover:underline">Undo waiver</button>
+      <button type="button" onClick={undo} disabled={state === "removing"}
+        className="mt-2 cursor-pointer text-sm font-medium text-primary hover:underline disabled:cursor-wait disabled:opacity-60">
+        {state === "removing" ? "Removing..." : "Undo waiver"}
+      </button>
       {state === "error" && <p role="alert" className="mt-1 text-xs text-definite">Could not remove the waiver.</p>}
     </div>
   );
@@ -86,14 +101,19 @@ function Feedback({ runId, finding }: { runId: string; finding: Finding }) {
   const [decision, setDecision] = useState<"accepted" | "false_alarm">("accepted");
   const [reason, setReason] = useState("");
   const [result, setResult] = useState<FeedbackResult | null>(null);
+  const [saving, setSaving] = useState(false); // blocks double clicks from sending the decision twice
 
   async function save(d: "accepted" | "false_alarm", why = "") {
+    if (saving) return;
+    setSaving(true);
     setDecision(d);
     try {
       setResult(await sendFeedback(runId, finding.id, d, why));
       setState("saved");
     } catch {
       setState("error");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -108,8 +128,8 @@ function Feedback({ runId, finding }: { runId: string; finding: Finding }) {
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => save("accepted")}
-          className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm font-medium hover:border-pass hover:text-pass">
+        <button type="button" onClick={() => save("accepted")} disabled={saving}
+          className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm font-medium hover:border-pass hover:text-pass disabled:cursor-wait disabled:opacity-60">
           <Check className="size-4" /> Accept finding
         </button>
         <button type="button" onClick={() => setState("reason")}
@@ -122,7 +142,9 @@ function Feedback({ runId, finding }: { runId: string; finding: Finding }) {
           <label htmlFor="fa-reason" className="sr-only">Why is this a false alarm?</label>
           <input id="fa-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is it wrong? (helps improve the check)"
             className="min-w-0 flex-1 rounded-md border border-line px-3 py-1.5 text-sm outline-none focus:border-primary" />
-          <button type="submit" className="cursor-pointer rounded-md bg-ink px-3 text-sm font-medium text-white">Save</button>
+          <button type="submit" disabled={saving} className="cursor-pointer rounded-md bg-ink px-3 text-sm font-medium text-white disabled:cursor-wait disabled:opacity-60">
+            {saving ? "Saving..." : "Save"}
+          </button>
         </form>
       )}
       {state === "error" && <p role="alert" className="text-xs text-definite">Could not save feedback. Try again.</p>}
@@ -173,7 +195,9 @@ export function FindingDetail({ runId, finding, page, corrected }: {
               <section>
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">Evidence</h3>
                 <ul className="space-y-3">
-                  {finding.evidence.map((e, i) => <EvidenceRow key={i} e={e} page={page} stroke={VERDICTS[finding.verdict].stroke} />)}
+                  {finding.evidence.map((e, i) => (
+                    <EvidenceRow key={i} e={e} page={cropImage(page, finding.category)} stroke={VERDICTS[finding.verdict].stroke} />
+                  ))}
                 </ul>
               </section>
             )}

@@ -88,6 +88,7 @@ export interface ReviewResult {
   ai_note: string | null;
   ai_models: string[];
   corrected_nutrition: CorrectedPanel | null;
+  timings?: Record<string, number>; // seconds per review stage, measured by the backend
 }
 
 export interface CorrectedRow {

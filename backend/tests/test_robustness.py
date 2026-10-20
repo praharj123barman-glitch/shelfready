@@ -1,5 +1,6 @@
 """Regressions from the pre-submission debugging pass."""
 
+import time
 from pathlib import Path
 
 import pymupdf
@@ -48,6 +49,16 @@ def test_extra_pages_are_reported_not_skipped_silently(tmp_path):
     assert "page 1 of 2" in (result.ai_note or "")
 
 
+def test_artwork_on_a_later_page_is_named_not_called_unreadable(tmp_path):
+    doc = pymupdf.open()
+    doc.new_page()  # empty first page
+    doc.insert_pdf(pymupdf.open(flat_label(tmp_path / "label.pdf")))
+    doc.save(tmp_path / "cover_then_art.pdf")
+    with pytest.raises(ArtworkError) as err:
+        read_artwork(tmp_path / "cover_then_art.pdf")
+    assert "page 2 does" in str(err.value) and "OCR" not in str(err.value)
+
+
 def test_missing_serving_size_is_named_plainly(tmp_path):
     report = review(flat_label(tmp_path / "label.pdf"), tmp_path).report
     assert any(f.title == "No serving size declared" for f in report.findings)
@@ -66,6 +77,20 @@ def test_cached_reads_are_independent_copies():
     a, b = read_artwork(pdf), read_artwork(pdf)
     a.lines[0].text = "changed by a caller"
     assert b.lines[0].text != "changed by a caller"
+
+
+def test_same_bytes_at_a_new_path_reuse_the_reading_but_report_the_new_path(tmp_path):
+    first = tmp_path / "run1" / "carton.pdf"
+    second = tmp_path / "run2" / "copy.pdf"
+    for p in (first, second):
+        p.parent.mkdir()
+        p.write_bytes(flat_label(tmp_path / "src.pdf").read_bytes())
+    a = read_artwork(first)
+    started = time.perf_counter()
+    b = read_artwork(second)
+    assert time.perf_counter() - started < 0.2  # not parsed again
+    assert (b.file_name, b.path) == ("copy.pdf", str(second))
+    assert [ln.text for ln in a.lines] == [ln.text for ln in b.lines]
 
 
 def test_rewritten_file_is_read_again(tmp_path):
