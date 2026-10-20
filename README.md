@@ -244,7 +244,7 @@ Tests and eval:
 
 ```bash
 cd backend
-../.venv/Scripts/python -m pytest -q          # 152 tests: math, parsing, OCR, sheet layouts, guardrails, markets, feedback, compare, API, robustness, full sample run
+../.venv/Scripts/python -m pytest -q          # 153 tests: math, parsing, OCR, sheet layouts, guardrails, markets, feedback, compare, API, robustness, full sample run
 ../.venv/Scripts/python -m eval.run_eval      # mutation eval, writes eval/RESULTS.md
 ```
 
@@ -252,7 +252,7 @@ Measured on the sample (Windows laptop, free tier): a review with fresh AI calls
 depending on which model answers; a first review whose AI answers are cached takes about 8 seconds; reviewing
 the same file again takes under a second, because the parsed PDF, renders and AI answers are reused (keyed on
 the file's content, never on its name). If every model is out of quota on `GEMINI_API_KEY`, an optional
-`GEMINI_FALLBACK_API_KEY` is tried next. PDF work runs in a separate worker process, so the server keeps
+`GEMINI_FALLBACK_API_KEY` (one key, or several separated by commas) is tried next. PDF work runs in a separate worker process, so the server keeps
 responding during a review. Stored reviews share identical files on disk; `python -m manage_runs stats`
 shows disk use and `python -m manage_runs prune --keep 50` lists (and with `--yes` deletes) old runs.
 

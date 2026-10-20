@@ -56,6 +56,18 @@ def test_requests_carry_a_fixed_seed():
     assert GeminiClient._config(RuleVerdicts, "system", 0.0).seed == SEED
 
 
+def test_several_fallback_keys_are_tried_in_turn():
+    settings = AISettings(api_key="k1", primary_model="a", fallback_api_key=" k2, k3 ,k2,, k1")
+    assert settings.api_keys == ["k1", "k2", "k3"]  # in order, each once, blanks dropped
+    client = GeminiClient(settings=settings)
+    for i in (0, 1):
+        client._sdk_clients[i] = FakeSdk({"a": quota_error})
+    answer = object()
+    client._sdk_clients[2] = FakeSdk({"a": lambda: answer})
+    response, label = client._call_with_fallback("prompt", None)
+    assert response is answer and label == "a (key 3)"
+
+
 def test_timeout_returns_without_waiting_for_the_stuck_call():
     client = client_with({"a": lambda: time.sleep(5)}, timeout=0.5, chain=("a",))
     start = time.perf_counter()

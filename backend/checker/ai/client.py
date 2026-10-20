@@ -58,7 +58,8 @@ class AISettings:
     primary_model: str = "gemini-2.5-flash"
     fallback_models: tuple[str, ...] = ()
     timeout_seconds: float = 60.0
-    fallback_api_key: str | None = None  # used when every model refuses on the first key
+    # used when every model refuses on the first key; several keys may be given, separated by commas
+    fallback_api_key: str | None = None
 
     @classmethod
     def from_env(cls) -> "AISettings":
@@ -79,12 +80,13 @@ class AISettings:
 
     @property
     def api_keys(self) -> list[str]:
-        """Keys to try, in order. Only their position is ever logged or shown, never the key."""
-        return [k for k in (self.api_key, self.fallback_api_key) if k]
+        """Keys to try, in order, each once. Only their position is ever logged or shown, never the key."""
+        keys = [self.api_key, *(self.fallback_api_key or "").split(",")]
+        return list(dict.fromkeys(k.strip() for k in keys if k and k.strip()))
 
     @property
     def routes(self) -> list[tuple[int, str]]:
-        """(key number, model) pairs in the order to try: every model on the first key, then on the second."""
+        """(key number, model) pairs in the order to try: every model on the first key, then on the next."""
         return [(i, m) for i in range(len(self.api_keys)) for m in self.model_chain]
 
 
