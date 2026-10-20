@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 
+from .artwork.ocr import FONT as OCR_FONT
 from .models import Artwork, BBox, TextLine
 
 # headings that start a labelled block on the back panel
@@ -50,12 +51,20 @@ def join_text(lines: list[TextLine]) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def same_size(a: TextLine, b: TextLine) -> bool:
+    """Set in the same font size. Live text sizes are exact; OCR sizes are estimated from box heights
+    (see artwork/ocr.py), which vary by up to about a third between lines of one paragraph."""
+    if a.font == OCR_FONT or b.font == OCR_FONT:
+        return abs(a.size - b.size) < 0.35 * max(a.size, b.size)
+    return abs(a.size - b.size) < 0.3
+
+
 def _column_lines(art: Artwork, start: TextLine) -> list[TextLine]:
     """Copy in the same text column and font size as the heading, below it."""
     return [
         ln
         for ln in art.copy_lines(start.panel)
-        if abs(ln.size - start.size) < 0.3 and ln.bbox.x0 >= start.bbox.x0 - 3 and ln.bbox.y0 >= start.bbox.y0 - 1
+        if same_size(ln, start) and ln.bbox.x0 >= start.bbox.x0 - 3 and ln.bbox.y0 >= start.bbox.y0 - 1
     ]
 
 

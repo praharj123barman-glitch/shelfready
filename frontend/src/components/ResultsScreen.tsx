@@ -5,7 +5,7 @@ import { ArrowLeft, GitCompare, Info, OctagonX, ShieldCheck } from "lucide-react
 import { useMemo, useState } from "react";
 import type { Finding, RunResponse, Verdict } from "@/lib/types";
 import { RISKS, RISK_ORDER } from "@/lib/verdicts";
-import type { CompareInput } from "@/lib/api";
+import { ARTWORK_ACCEPT, type CompareInput } from "@/lib/api";
 import { ArtworkViewer } from "./ArtworkViewer";
 import { Carton3D } from "./Carton3D";
 import { ChangesView } from "./ChangesView";
@@ -92,8 +92,8 @@ export function ResultsScreen({ run, onBack, onCompare, error }: {
             {comparing ? (
               <>
                 <label className="cursor-pointer rounded-md border border-line px-2.5 py-1 text-sm text-ink-muted hover:border-primary hover:text-primary">
-                  Upload new proof (PDF)
-                  <input type="file" accept=".pdf" className="sr-only"
+                  Upload new proof (PDF or image)
+                  <input type="file" accept={ARTWORK_ACCEPT} className="sr-only"
                     onChange={(e) => e.target.files?.[0] && onCompare({ useAi: run.result.ai_ran, useSampleV2: false, artwork: e.target.files[0] })} />
                 </label>
                 <button type="button" onClick={() => onCompare({ useAi: run.result.ai_ran, useSampleV2: true })}

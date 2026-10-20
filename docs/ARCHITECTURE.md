@@ -11,6 +11,8 @@ to run it. This page explains how the code is organised, how a review flows thro
   size) is a *deterministic check*: plain Python, with evidence. Only these can say **Definite**.
 - Rules no code check covers go to the AI. Its answers must cite evidence, and code verifies every citation
   before the finding is kept. AI findings are at most **Likely**.
+- Text read by OCR (a scan or photo) is treated the same way: a problem proven from it is at most **Likely**
+  (`ocr_capped` in pipeline.py), because a misread digit would otherwise become a false Definite.
 - If something could not be checked (no API key, a model failed, a check crashed), the report says so. It never
   shows a silent pass.
 
@@ -24,8 +26,10 @@ backend/api_models.py     Request/response shapes (mirrored in frontend/src/lib/
 backend/checker/          All checking logic. Knows nothing about HTTP.
     pipeline.py           ReviewPipeline: the full review, step by step.  <- start reading here
     engine.py             run_checks(), Report, RiskRanker.
-    artwork/              Everything that touches the PDF (see its __init__.py for the module map).
-    content_sheet.py      The approved content sheet (.xlsx) with cell addresses.
+    artwork/              Everything that touches the PDF (see its __init__.py for the module map),
+                          including OCR for pages with no live text (artwork/ocr.py).
+    content_sheet.py      The approved content sheet (.xlsx/.csv, any layout) with cell addresses.
+                          New label names for a field go in FIELD_ALIASES / NUTRIENT_ALIASES.
     rules.py              Rule, RuleSet, rule pack and rulebook loaders, equivalent rules.
     sections.py           Finding blocks on the artwork: ingredients, allergens, badges ...
     nutrition.py          Nutrition Facts parsing, FDA rounding, the corrected panel.

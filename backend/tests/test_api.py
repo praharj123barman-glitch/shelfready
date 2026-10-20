@@ -104,8 +104,10 @@ def test_unknown_and_malformed_runs(client):
 
 def test_bad_uploads_are_rejected_and_leave_nothing_behind(client):
     assert client.post("/api/review", data=OFFLINE).status_code == 400  # no artwork
-    wrong_type = client.post("/api/review", data=OFFLINE, files={"artwork": ("a.png", b"x", "image/png")})
+    wrong_type = client.post("/api/review", data=OFFLINE, files={"artwork": ("a.docx", b"x", "application/msword")})
     assert wrong_type.status_code == 400
+    broken_image = client.post("/api/review", data=OFFLINE, files={"artwork": ("a.png", b"not an image", "image/png")})
+    assert broken_image.status_code == 422 and "as an image" in broken_image.json()["detail"]
     empty = client.post("/api/review", data=OFFLINE, files={"artwork": ("a.pdf", b"", "application/pdf")})
     assert empty.status_code == 400
     damaged = client.post("/api/review", data=OFFLINE, files={"artwork": ("a.pdf", b"not a pdf", "application/pdf")})

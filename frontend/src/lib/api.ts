@@ -4,6 +4,9 @@ import type { ChatAnswer, ChatTurn, FeedbackResult, Health, RunResponse } from "
 // for "localhost", which cost about 300 ms on every new connection to the API
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
+// artwork files the checker reads: PDFs, and photos or scans (read by OCR, see backend artwork/ocr.py)
+export const ARTWORK_ACCEPT = ".pdf,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp";
+
 export class ApiError extends Error {}
 
 /** FastAPI sends a string for our own errors and a list for validation errors. */

@@ -42,7 +42,7 @@ from .checks.base import CheckContext
 from .content_sheet import ApprovedSpec
 from .engine import Report
 from .feedback import FeedbackStore
-from .models import Artwork, Finding
+from .models import Artwork, Finding, Verdict
 from .nutrition import CorrectedPanel, corrected_panel, read_nutrition_panel
 from .pdf_work import InlinePdfWork, PdfWork
 from .rules import RuleSet, load_regulation_pack, load_rulebook
@@ -108,6 +108,12 @@ class ReviewPipeline:
             checked = self.pdf.check(art, rules, spec, with_panels=ai_ran)
             timer.seconds.update(checked.seconds)
             report = checked.report
+            if art.text_source == "ocr":
+                report = report.with_findings([ocr_capped(f) for f in report.findings])
+                notes.append(ocr_note(art))
+            if spec is not None and (missing := spec.missing_fields()):
+                notes.append(f"content sheet {spec.file_name}: found no {', '.join(missing)}, "
+                             "so the checks against those approved values were skipped")
             not_applicable: list[str] = []
             if ai_ran:
                 report, not_applicable = self._add_ai_findings(report, art, rules, spec, checked.crops, timer)
@@ -179,6 +185,33 @@ class ReviewPipeline:
             return None
         panel = read_nutrition_panel(art)
         return corrected_panel(panel) if panel else None
+
+
+OCR_CAVEAT = ("[Text read by OCR from the page image: a misread character can cause this, "
+              "so it is marked likely, not definite. Confirm it on the artwork.]")
+
+
+def ocr_capped(finding: Finding) -> Finding:
+    """A problem proven from OCR text is only as sure as the OCR: Definite becomes Likely.
+    Findings that do not rest on read text (for example a decoded barcode) keep their verdict."""
+    if finding.verdict != Verdict.DEFINITE or not any(e.line_ids for e in finding.evidence):
+        return finding
+    return finding.model_copy(update={
+        "verdict": Verdict.LIKELY,
+        "confidence": min(finding.confidence, 0.8),
+        "explanation": f"{finding.explanation} {OCR_CAVEAT}",
+    })
+
+
+def ocr_note(art: Artwork) -> str:
+    low = sum(1 for ln in art.lines if ln.confidence < 0.8)
+    note = (f"{art.file_name} has no live text, so its {len(art.lines)} text lines were read by OCR"
+            + (f" ({low} with low confidence)" if low else "")
+            + "; issues found in that text are marked likely, never definite")
+    if len(art.panels) <= 1:
+        note += ("; no dieline was found, so the page is checked as one panel and rules about where copy "
+                 "sits (front panel, folds) could not be checked")
+    return note
 
 
 def coverage_table(rules: RuleSet, findings: list[Finding], not_applicable: list[str]) -> list[dict]:

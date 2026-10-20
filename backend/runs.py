@@ -22,16 +22,19 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from api_models import RunView
+from checker.artwork import IMAGE_SUFFIXES, ArtworkError, image_to_pdf
+from checker.content_sheet import SHEET_SUFFIXES
 from checker.models import Finding
 from checker.pipeline import ReviewResult
 
 RUNS_DIR = Path(__file__).resolve().parent / "runs"
 MAX_UPLOAD_MB = 25
 RESERVED_NAMES = {"result.json", "inputs.json", "view.json", "artwork.png", "print.png", "feedback.jsonl"}  # the run's own files
-ALLOWED_SUFFIXES = {"artwork": {".pdf"}, "sheet": {".xlsx"}, "rules": {".json", ".md", ".txt"}}
+ALLOWED_SUFFIXES = {"artwork": {".pdf", *IMAGE_SUFFIXES}, "sheet": SHEET_SUFFIXES, "rules": {".json", ".md", ".txt"}}
 
 
 class RunInputs(BaseModel):
@@ -93,6 +96,14 @@ class ReviewRun:
             raise HTTPException(400, f"{name} is empty")
         path = self._free_name(Path(name).name.replace(" ", "_"))  # .name drops any directory part
         path.write_bytes(data)
+        if kind == "artwork" and path.suffix.lower() in IMAGE_SUFFIXES:
+            # a photo or scan: reviewed as a one-page PDF of the image (its text is read by OCR)
+            try:
+                pdf = await run_in_threadpool(image_to_pdf, data, name)
+            except ArtworkError as exc:
+                raise HTTPException(422, str(exc)) from exc
+            path = self._free_name(f"{path.stem}.pdf")
+            path.write_bytes(pdf)
         return path
 
     def _free_name(self, name: str) -> Path:

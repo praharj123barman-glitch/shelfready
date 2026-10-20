@@ -28,6 +28,7 @@ class RawLine:
     bbox: tuple[float, float, float, float]
     size: float
     font: str
+    confidence: float = 1.0  # live text is exact; OCR lines carry the recogniser's score
 
     @property
     def box(self) -> BBox:

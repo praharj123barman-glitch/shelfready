@@ -15,7 +15,9 @@ ShelfReady answers "is this ready to launch?" with findings a reviewer can trust
 **code proves, AI reasons, and code checks the AI**:
 
 1. It reads the PDF exactly: live text with positions, layers and drawing order, the barcode, and the
-   carton's faces and flaps rebuilt from the dieline's own fold lines.
+   carton's faces and flaps rebuilt from the dieline's own fold lines. A scan or photo with no live text is
+   read by local OCR; problems found in OCR text are marked Likely, never Definite, since a misread digit
+   must not become a proven error. Content sheets are read in any layout (form, table, CSV, other label names).
 2. 41 code checks prove what can be proven: nutrition math, %DV and FDA rounding, ingredients and copy against
    the approved sheet, claims against ingredients, allergen statements, net quantity rules, hidden objects,
    copy crossing folds, and type size measured from the printed ink. These are labelled Definite.
@@ -66,7 +68,10 @@ Attach `docs/architecture.png`. (The same diagram is in the README as Mermaid.)
 * **PyMuPDF:** live text with glyph boxes, optional content layers (dieline vs design), drawing sequence
   numbers (hidden text), rendering for crops and ink measurement.
 * **zxing-cpp:** barcode decoding; the GS1 check digit is verified in code.
-* **openpyxl:** content sheet with cell addresses for evidence.
+* **RapidOCR** (PP-OCR models on onnxruntime, run locally): text from scans and photos; on a flattened scan of
+  the Esko carton it reads 97% of the visible words, and the code checks find the same problems as on the PDF
+  except those that need the dieline.
+* **openpyxl** and csv: content sheets in any layout, with cell addresses for evidence.
 * **FastAPI + Pydantic:** API with explicit schemas and validated uploads; PDF work runs in a separate worker
   process so the app stays responsive during a review.
 * **Next.js 16, React 19, Tailwind CSS 4, Framer Motion:** the review app, with evidence boxes drawn in PDF

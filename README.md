@@ -65,6 +65,8 @@ by verdict, then risk, so an allergen problem is never buried under a tagline.
 | **Follow-up questions** | Ask about any finding; answers use only the evidence and cite artwork lines, which are checked |
 | **Rule coverage** | Every rule supplied, and whether code, AI or nobody checked it |
 | **3D carton** | The dieline folded into a box from its own fold lines, rendered with the dieline layers switched off so it looks printed; issues are pins on the faces, click one to open it. Content on flaps hidden when closed is listed |
+| **Scans and photos** | Artwork with no live text (a scan, a phone photo, outlined type; PDF, PNG, JPG or TIFF) is read by local OCR. The same checks run; problems found in OCR text are marked Likely, never Definite, and the screen says what could not be checked |
+| **Content sheets in any layout** | Form layouts, header-row tables, "Label: value" cells, several worksheets, or CSV. Other label names are recognised ("Ingredients", "Net Wt", "EAN", UK nutrient names such as "Energy" and "Fibre"), and missing approved values are reported instead of silently skipped |
 
 | Corrected Nutrition Facts | 3D carton with issue pins |
 |---|---|
@@ -118,15 +120,15 @@ unknown panels are all downgraded, and the schema has no way to express "definit
 ```mermaid
 flowchart TB
     subgraph Inputs
-        PDF[Artwork PDF]
-        XLSX[Content sheet .xlsx]
+        PDF[Artwork PDF,<br/>scan or photo]
+        XLSX[Content sheet<br/>.xlsx or .csv]
         RULES[Rules: FDA pack .json,<br/>company rulebook .md,<br/>any rules text .txt]
     end
 
     subgraph Read["1 Read exactly"]
-        EXT[PDF reader<br/>live text, positions, layers,<br/>drawing order, barcode]
+        EXT[PDF reader<br/>live text, positions, layers,<br/>drawing order, barcode;<br/>OCR when there is no live text]
         DIE[Dieline geometry<br/>faces and flaps from fold lines,<br/>safe areas]
-        SHEET[Sheet reader<br/>fields with cell addresses]
+        SHEET[Sheet reader<br/>any layout, fields<br/>with cell addresses]
         RB[Rule loader<br/>exact parse, or AI extraction<br/>with quote check]
     end
 
@@ -169,7 +171,8 @@ A PNG version is in [`docs/architecture.png`](docs/architecture.png).
 | Artwork reading | **PyMuPDF** (text with glyph boxes, optional content layers, drawing sequence numbers, rendering) | Exact text and positions from the PDF; layers separate dieline marks from print; drawing order reveals hidden text |
 | Barcode | **zxing-cpp** on a 300 dpi render | Decodes the real printed barcode, then the GS1 check digit is verified in code |
 | Type size | Rendered ink measurement at 1200 dpi | Font metrics overstate letter height; FDA measures the lowercase "o" |
-| Content sheet | **openpyxl** | Every value keeps its cell address for evidence |
+| Scans and photos | **RapidOCR** (PP-OCR models on onnxruntime, run locally) at 300 dpi, plus a sideways pass for rotated side-panel text | No live text to read; nothing leaves the machine; 97% of the Esko carton's visible words read from a flattened scan |
+| Content sheet | **openpyxl** and the csv module, with a label alias table | Every value keeps its cell address for evidence, whatever the layout |
 | Rule reasoning, marks, chat | **Google Gemini** (2.5 Flash primary, 3 Flash and 2.5 Flash Lite as fallbacks) with JSON schema output, temperature 0 | Multimodal: reads panel images for logos and seals; structured output makes every claim checkable |
 | Guardrails | Our verification layer (Python) | Quote, absence and panel checks; downgrade on failure; AI can never be Definite |
 | API | **FastAPI** + Pydantic | Explicit request and response schemas, validated uploads, clear errors |
@@ -209,6 +212,11 @@ FDA's or FSSAI's "no added sugar"), so a finding cites whichever equivalent rule
   only; AI-judged changes are listed separately with an AI tag.
 * **The source of truth can be wrong too.** Impossible values and open notes in the approved sheet are reported
   as review items rather than used blindly.
+* **OCR text is never proof.** A misread digit could turn into a false "wrong calories", so on scanned artwork a
+  problem proven from the text is marked Likely with a note to confirm it on the artwork. The screen says the
+  text came from OCR, how many lines were low confidence, and which placement rules (front panel, folds) could
+  not be checked without a dieline. A content sheet without, say, an ingredient list is reported the same way,
+  instead of every comparison against it quietly passing.
 
 ## Run it locally
 
@@ -229,13 +237,14 @@ pnpm install
 pnpm dev                                                        # http://localhost:3000
 ```
 
-Click **Review the sample carton**, or upload your own artwork PDF, content sheet and rule files.
+Click **Review the sample carton**, or upload your own artwork (PDF, or a scan or photo), content sheet
+(.xlsx or .csv) and rule files.
 
 Tests and eval:
 
 ```bash
 cd backend
-../.venv/Scripts/python -m pytest -q          # 102 tests: math, parsing, guardrails, markets, feedback, compare, API, robustness, full sample run
+../.venv/Scripts/python -m pytest -q          # 152 tests: math, parsing, OCR, sheet layouts, guardrails, markets, feedback, compare, API, robustness, full sample run
 ../.venv/Scripts/python -m eval.run_eval      # mutation eval, writes eval/RESULTS.md
 ```
 
@@ -249,7 +258,12 @@ shows disk use and `python -m manage_runs prune --keep 50` lists (and with `--ye
 
 ## Limitations (honest list)
 
-* Artwork must have live text. Outlined or scanned artwork would need OCR, which this prototype does not do.
+* Scanned or photographed artwork is read by OCR, which misses some text: curved lettering (the "NO" of a "No
+  Added Sugar" badge), very small type on a blurry photo, and anything covered by something else. With AI on,
+  badges and seals are also read from the panel images. A scan has no dieline, so placement rules (net weight
+  on the front panel, copy across folds) and glyph-based type size checks go to review instead of running.
+* Content sheets are matched by label. A label the alias table does not know (and that is not in a
+  label/value form) is not used; the review then says which important values were missing.
 * The FDA rule pack is a core subset, paraphrased. Always confirm against the current eCFR before release.
 * Without dieline guide labels, left and right side panels cannot be told apart (front and back are found from
   geometry and type size).

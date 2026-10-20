@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { FileSpreadsheet, FileText, ScrollText, Sparkles, Upload } from "lucide-react";
 import { useState } from "react";
-import type { Market, ReviewInput } from "@/lib/api";
+import { ARTWORK_ACCEPT, type Market, type ReviewInput } from "@/lib/api";
 
 const MARKET_RULES: Record<Market, string[]> = {
   US: ["US FDA labeling rule pack (21 CFR 101)", "Dancing Fish company rulebook (demo)", "Retailer guidelines in plain prose (demo, read by AI)"],
@@ -103,8 +103,8 @@ export function StartScreen({ aiAvailable, error, onStart }: Props) {
         >
           <h2 className="text-lg font-semibold">Or check your own files</h2>
           <div className="mt-4 space-y-4">
-            <FilePick label="Artwork PDF" hint="Print-ready or proof PDF with live text" accept=".pdf" icon={FileText} files={artwork} onChange={setArtwork} required />
-            <FilePick label="Approved content sheet" hint="Excel sheet with the approved copy and nutrition" accept=".xlsx" icon={FileSpreadsheet} files={sheet} onChange={setSheet} />
+            <FilePick label="Artwork" hint="Print or proof PDF. Scans and photos (PDF, PNG, JPG, TIFF) are read by OCR" accept={ARTWORK_ACCEPT} icon={FileText} files={artwork} onChange={setArtwork} required />
+            <FilePick label="Approved content sheet" hint="Excel (.xlsx) or CSV with the approved copy and nutrition, in any layout" accept=".xlsx,.xlsm,.csv" icon={FileSpreadsheet} files={sheet} onChange={setSheet} />
             <FilePick
               label="Rules" hint={`JSON rule pack, rulebook (.md) or any rules text (.txt). Default: ${market === "US" ? "US FDA" : "India FSSAI"} pack`}
               accept=".json,.md,.txt" multiple icon={ScrollText} files={rules} onChange={setRules}

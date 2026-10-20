@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import io
 import threading
 from collections import OrderedDict
 from pathlib import Path
@@ -132,6 +133,33 @@ def _open_document(path: Path) -> pymupdf.Document:
     if doc.needs_pass:  # its text cannot be read without the password
         raise ArtworkError(f"{path.name} is password-protected. Export it again without a password and upload that.")
     return doc
+
+
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
+ASSUMED_SCAN_DPI = 300  # photos and many scans carry no real resolution (often a nominal 72 or 96)
+
+
+def image_to_pdf(data: bytes, name: str) -> bytes:
+    """A one-page PDF holding a photo or scan of artwork, so it goes through the same reader (by OCR).
+
+    The image is turned upright from its camera orientation tag, and the page is sized from the
+    image's own resolution when that is a real scan resolution, else from 300 dpi."""
+    from PIL import Image, ImageOps, UnidentifiedImageError  # Pillow is already a dependency
+
+    try:
+        image = Image.open(io.BytesIO(data))
+        image = ImageOps.exif_transpose(image).convert("RGB")
+    except (UnidentifiedImageError, OSError) as exc:
+        raise ArtworkError(f"Could not open {name} as an image.") from exc
+    dpi = float((image.info.get("dpi") or (0, 0))[0] or 0)
+    dpi = dpi if 150 <= dpi <= 2400 else ASSUMED_SCAN_DPI
+    png = io.BytesIO()
+    image.save(png, format="PNG")
+    with PDF_LOCK:
+        doc = pymupdf.open()
+        page = doc.new_page(width=image.width * 72 / dpi, height=image.height * 72 / dpi)
+        page.insert_image(page.rect, stream=png.getvalue())
+        return doc.tobytes(deflate=True)
 
 
 def _segments_on_layer(page: pymupdf.Page, layer_word: str) -> list[Segment]:

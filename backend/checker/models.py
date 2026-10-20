@@ -55,6 +55,7 @@ class TextLine(BaseModel):
     hidden: bool = False  # covered by an opaque shape drawn on top
     seqno: int = -1
     layer: str | None = None  # PDF optional content group, e.g. "DESIGN"
+    confidence: float = 1.0  # 1.0 for live text; the recogniser's score for OCR text
 
 
 class Evidence(BaseModel):
@@ -102,6 +103,8 @@ class Artwork(BaseModel):
     file_name: str
     path: str | None = None  # local file, used to render panel images for the AI
     page_count: int = 1  # only the first page is checked; more pages are reported, not skipped silently
+    # "live": text read exactly from the PDF; "ocr": no live text, so it was read from the page image
+    text_source: Literal["live", "ocr"] = "live"
     width: float
     height: float
     panels: dict[str, BBox]

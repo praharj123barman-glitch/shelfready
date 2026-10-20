@@ -41,10 +41,12 @@ table under the US panel), 10 likely, 6 for review, 16 verified passes.
 
 **For daily review work:** switch between US FDA and India FSSAI rules; a corrected Nutrition Facts panel;
 compare a new proof with the last one (what changed, issues resolved and introduced); mark a false alarm with a
-reason, which waives it on later reviews and guides the AI; a 3D carton with issue pins.
+reason, which waives it on later reviews and guides the AI; a 3D carton with issue pins. Scans and photos of
+artwork are read by local OCR (issues from OCR text are marked likely, never definite), and content sheets
+are read in any layout, including CSV.
 
 **Measured, not claimed:** a mutation eval edits the real sample files 23 ways: 16/16 injected defects
-detected, 7/7 fixes recognised, 0 false alarms. 140 automated tests; browser QA of every journey in Chromium
+detected, 7/7 fixes recognised, 0 false alarms. 152 automated tests; browser QA of every journey in Chromium
 and Firefox.
 
 **Live demo:** https://shelfready-check.vercel.app (click "Review the sample carton").
@@ -103,5 +105,5 @@ key is optional: without it the code checks still run and the app says the AI pa
    - Open http://localhost:3000
 3. Click **Review the sample carton** (the Esko sample files are included in `samples/`), or upload your own
    artwork PDF, content sheet and rule files.
-4. Optional checks, from `backend/`: `python -m pytest -q` (140 tests, no API key needed) and
+4. Optional checks, from `backend/`: `python -m pytest -q` (152 tests, no API key needed) and
    `python -m eval.run_eval` (mutation eval).

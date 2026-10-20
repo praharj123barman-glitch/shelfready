@@ -89,6 +89,12 @@ def _same_row(a: TextLine, b: TextLine) -> bool:
     return abs(a.bbox.cy - b.bbox.cy) < 0.6 * max(a.size, b.size)
 
 
+def _number_right_of(label: TextLine, region: list[TextLine]) -> TextLine | None:
+    """A bare number on the same row, to the right of the label ('Calories' ... '166')."""
+    return next((o for o in region if o.id != label.id and re.fullmatch(r"\d+(\.\d+)?", o.text.strip())
+                 and o.bbox.x0 > label.bbox.x0 and _same_row(o, label)), None)
+
+
 def read_nutrition_panel(art: Artwork) -> NutritionPanel | None:
     title = next((ln for ln in art.copy_lines() if ln.text.strip().lower() == "nutrition facts"), None)
     if title is None:
@@ -108,8 +114,11 @@ def read_nutrition_panel(art: Artwork) -> NutritionPanel | None:
             panel.serving_size_line_ids = [ln.id] + [o.id for o in value]
         elif m := re.match(r"calories\s+([\d.]+)$", t, re.I):
             panel.calories, panel.calories_line_id = float(m.group(1)), ln.id
-        elif t.startswith("*") and "daily value" in t.lower():
-            panel.footnote_present = True
+        elif t.lower() == "calories" and panel.calories is None and (number := _number_right_of(ln, region)):
+            # the large calorie figure set as its own piece of text (or read as one by OCR)
+            panel.calories, panel.calories_line_id = float(number.text.strip()), ln.id
+        elif re.match(r"\*?\s*the\s*%\s*daily value", t, re.I) or (t.startswith("*") and "daily value" in t.lower()):
+            panel.footnote_present = True  # OCR may drop the leading asterisk
         elif parsed := _parse_amount_line(t):
             key, amount, unit = parsed
             dv = next((d for d in dv_lines if _same_row(d, ln)), None)

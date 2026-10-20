@@ -3,6 +3,9 @@ pymupdf==2.0
 openpyxl==3.1.5
 zxing-cpp==3.1.1
 pillow==13.0.0
+# OCR for scans and photos with no live text (models ship inside the package, run locally)
+rapidocr==3.10.0
+onnxruntime==1.31.0
 # data contracts + API
 pydantic==2.14.1
 fastapi==0.148.0

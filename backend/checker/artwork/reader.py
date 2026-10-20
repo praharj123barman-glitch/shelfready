@@ -3,10 +3,11 @@
     art = read_artwork("carton.pdf")
     art.lines[0].text, art.lines[0].panel, art.lines[0].hidden
 
-Text is read live from the PDF (no OCR guessing), with its position on the
-dieline. ``ArtworkReader`` adds what a plain text dump loses: the panel each
-line sits on, whether it is a dieline mark or real copy, and whether it is
-hidden under a shape.
+Text is read live from the PDF, with its position on the dieline. A page with
+no live text (a scan, a photo, outlined type) is read by OCR instead (ocr.py),
+and the Artwork says so. ``ArtworkReader`` adds what a plain text dump loses:
+the panel each line sits on, whether it is a dieline mark or real copy, and
+whether it is hidden under a shape.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from PIL import Image
 from ..models import Artwork, BBox, TextLine
 from .guides import is_guide_line, is_guide_text
 from .hidden_text import HiddenTextDetector
+from .ocr import ocr_available, ocr_lines
 from .panels import PanelFinder, content_panels, panel_for
 from .pdf_file import ArtworkError, PdfFile
 from .text_lines import RawLine, TextAssembler
@@ -46,11 +48,13 @@ class ArtworkReader:
 
     def read(self) -> Artwork:
         text = TextAssembler(self.pdf.glyphs(self.page_no))
-        if not text.lines:
-            raise ArtworkError(self._no_text_message())
-        guide_lines = [(line.text, line.box) for line in text.lines if is_guide_text(line.text)]
-        panels = PanelFinder(self.pdf, self.page_no, guide_lines, text.raw).find()
-        lines = self._text_lines(text.lines, panels)
+        raw_lines, all_raw, source = text.lines, text.raw, "live"
+        if not raw_lines:  # a scan, a photo or outlined type: read the page image instead
+            raw_lines = all_raw = self._ocr_lines()
+            source = "ocr"
+        guide_lines = [(line.text, line.box) for line in raw_lines if is_guide_text(line.text)]
+        panels = PanelFinder(self.pdf, self.page_no, guide_lines, all_raw).find()
+        lines = self._text_lines(raw_lines, panels)
         return Artwork(
             file_name=self.name,
             path=str(self.path) if self.path else "",
@@ -59,18 +63,27 @@ class ArtworkReader:
             panels=panels,
             content_panels=content_panels(self.page, panels, lines),
             page_count=self.pdf.page_count,
+            text_source=source,
             lines=lines,
             barcodes=read_barcodes(self.page, panels),
         )
 
-    def _no_text_message(self) -> str:
-        """Why there is nothing to check: the file has no text at all, or its text is on another page."""
+    def _ocr_lines(self) -> list[RawLine]:
+        """The page's text by OCR, when the PDF has none. Text on another page means the wrong page was
+        exported, which is more useful to say than to OCR the empty one."""
         with_text = [i + 1 for i in range(self.pdf.page_count)
                      if i != self.page_no and self.pdf.page(i).get_text("text").strip()]
         if with_text:
-            return (f"Page {self.page_no + 1} of {self.name} has no live text, but page {with_text[0]} does. "
-                    "Only the first page is checked: export the artwork page on its own and upload that.")
-        return f"{self.name} has no live text. Outlined or scanned artwork needs OCR, which this prototype does not do yet."
+            raise ArtworkError(f"Page {self.page_no + 1} of {self.name} has no live text, but page {with_text[0]} does. "
+                               "Only the first page is checked: export the artwork page on its own and upload that.")
+        if not ocr_available():
+            raise ArtworkError(f"{self.name} has no live text, and OCR is not installed "
+                               "(pip install -r requirements.txt adds it).")
+        lines = ocr_lines(self.page)
+        if not lines:
+            raise ArtworkError(f"{self.name} has no live text, and OCR found no readable text on it either. "
+                               "Upload the print PDF, or a sharper scan (300 dpi or more).")
+        return lines
 
     def _text_lines(self, raw_lines: list[RawLine], panels: dict[str, BBox]) -> list[TextLine]:
         detector = HiddenTextDetector(self.page)
@@ -89,6 +102,7 @@ class ArtworkReader:
                 hidden=paint.hidden,
                 seqno=paint.seqno,
                 layer=paint.layer,
+                confidence=raw.confidence,
             ))
         return lines
 
