@@ -65,6 +65,12 @@ export function ArtworkViewer({ imageUrl, pageWidth, pageHeight, findings, selec
         </div>
       </div>
 
+      {selected && !selected.evidence.some((e) => e.bbox) && (
+        <p className="border-b border-line bg-surface-muted px-3 py-1.5 text-xs text-ink-muted" aria-live="polite">
+          This finding has no single spot on the artwork (for example, something missing from the whole pack).
+          Its evidence is listed in the detail panel.
+        </p>
+      )}
       <div ref={scroller} className="relative min-h-0 flex-1 overflow-auto bg-surface-muted p-3">
         <div className="relative" style={{ width: `${ZOOMS[zoom] * 100}%` }}>
           {/* eslint-disable-next-line @next/next/no-img-element -- dynamic image from the API, sized by its container */}

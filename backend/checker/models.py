@@ -103,8 +103,9 @@ class Artwork(BaseModel):
     file_name: str
     path: str | None = None  # local file, used to render panel images for the AI
     page_count: int = 1  # only the first page is checked; more pages are reported, not skipped silently
-    # "live": text read exactly from the PDF; "ocr": no live text, so it was read from the page image
-    text_source: Literal["live", "ocr"] = "live"
+    # "live": text read exactly from the PDF; "ocr": no live text, so we read it from the page image;
+    # "ocr_layer": a searchable scan, whose text is the scanner's own invisible OCR layer
+    text_source: Literal["live", "ocr", "ocr_layer"] = "live"
     width: float
     height: float
     panels: dict[str, BBox]

@@ -22,10 +22,11 @@ from checker.feedback import FeedbackStore
 from checker.models import Verdict
 from checker.nutrition import read_nutrition_panel
 from checker.pdf_work import InlinePdfWork
-from checker.pipeline import OCR_CAVEAT, ReviewPipeline
+from checker.pipeline import OCR_CAVEAT, OCR_INDEPENDENT_CHECKS, ReviewPipeline
 from checker.sections import find_blocks
 
 SAMPLES = Path(__file__).resolve().parents[2] / "samples"
+RULES = Path(__file__).resolve().parents[2] / "rules"
 CARTON = SAMPLES / "DancingFish_Granola_Berry_US_Carton.pdf"
 SHEET = SAMPLES / "DancingFish_Granola_BerryCrunch_US_Content_Sheet.xlsx"
 
@@ -73,8 +74,63 @@ def test_problems_in_ocr_text_are_likely_never_definite(scan_review):
     findings = scan_review.report.findings
     calories = next(f for f in findings if f.check == "calories_atwater")
     assert calories.verdict == Verdict.LIKELY and OCR_CAVEAT in calories.explanation
-    assert not [f.title for f in findings if f.verdict == Verdict.DEFINITE and any(e.line_ids for e in f.evidence)]
+    assert not [f.title for f in findings if f.verdict == Verdict.DEFINITE and f.check not in OCR_INDEPENDENT_CHECKS]
     assert "read by OCR" in scan_review.ai_note and "one panel" in scan_review.ai_note
+
+
+def test_missing_items_on_a_scan_are_not_proven_missing(scan_pdf, tmp_path):
+    """"No FSSAI licence number" cites no line, so a line-based cap missed it: OCR may simply not have read it."""
+    rules = [RULES / "india_fssai_food.json", RULES / "artwork_approval_core.json"]
+    result = ReviewPipeline(feedback=FeedbackStore(tmp_path / "fb.json")).run(scan_pdf, SHEET, rules, use_ai=False)
+    licence = next(f for f in result.report.findings if f.check == "fssai_licence")
+    assert licence.verdict == Verdict.LIKELY and OCR_CAVEAT in licence.explanation
+    assert not [f.title for f in result.report.findings if f.verdict == Verdict.DEFINITE and f.check not in OCR_INDEPENDENT_CHECKS]
+
+
+def test_a_searchable_scan_is_treated_as_ocr_text(tmp_path):
+    """Scanning software lays its own OCR text over the picture, invisibly. That text is a guess,
+    so it must not prove anything the way real artwork text does."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=400, height=300)
+    page.insert_image(page.rect, pixmap=pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 40, 30), 0))
+    for y, text in [(60, "Nutrition Facts"), (80, "Serving size 30g"), (100, "Calories 900"),
+                    (120, "Total Fat 1g"), (140, "Total Carbohydrate 2g"), (160, "Protein 1g")]:
+        page.insert_text((40, y), text, fontsize=10, render_mode=3)
+    path = tmp_path / "searchable.pdf"
+    doc.save(path)
+    assert read_artwork(path).text_source == "ocr_layer"
+    result = ReviewPipeline(feedback=FeedbackStore(tmp_path / "fb.json")).run(path, None, [], use_ai=False)
+    calories = next(f for f in result.report.findings if f.check == "calories_atwater")
+    assert calories.verdict == Verdict.LIKELY and "invisible OCR layer" in result.ai_note
+
+
+def test_an_ocr_failure_is_an_error_not_an_empty_review(tmp_path, monkeypatch):
+    import checker.artwork.reader as reader
+
+    def broken(page):
+        raise RuntimeError("onnxruntime failed")
+    monkeypatch.setattr(reader, "ocr_lines", broken)
+    doc = pymupdf.open()
+    doc.new_page(width=200, height=120).draw_rect(pymupdf.Rect(10, 10, 190, 110), fill=(0.2, 0.4, 0.9))
+    path = tmp_path / "unreadable.pdf"
+    doc.save(path)
+    with pytest.raises(ArtworkError, match="OCR could not read unreadable.pdf"):
+        read_artwork(path)
+
+
+def test_oversized_and_bomb_images_are_refused_before_decoding():
+    import io
+
+    from PIL import Image
+
+    from checker.artwork import image_to_pdf
+    bomb, big = io.BytesIO(), io.BytesIO()
+    Image.new("1", (20000, 20000), 1).save(bomb, format="PNG")  # 88 KB of file, 400 megapixels
+    Image.new("1", (8000, 7500), 1).save(big, format="PNG")  # 60 megapixels: allowed by Pillow, too big here
+    with pytest.raises(ArtworkError, match="too large to open safely"):
+        image_to_pdf(bomb.getvalue(), "bomb.png")  # before the fix: an unhandled DecompressionBombError (a 500)
+    with pytest.raises(ArtworkError, match="8000 x 7500 pixels.*50 megapixels"):
+        image_to_pdf(big.getvalue(), "big.png")
 
 
 def test_the_scan_finds_what_the_pdf_finds(scan_review):

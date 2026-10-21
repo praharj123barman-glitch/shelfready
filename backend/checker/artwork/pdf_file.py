@@ -137,6 +137,9 @@ def _open_document(path: Path) -> pymupdf.Document:
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
 ASSUMED_SCAN_DPI = 300  # photos and many scans carry no real resolution (often a nominal 72 or 96)
+# 50 MP: a 48 MP phone photo or an A3 page at 500 dpi. A small file can claim a huge size (a
+# "decompression bomb": 88 KB of PNG for 400 MP), so the size is checked before decoding.
+MAX_IMAGE_PIXELS = 50_000_000
 
 
 def image_to_pdf(data: bytes, name: str) -> bytes:
@@ -147,8 +150,14 @@ def image_to_pdf(data: bytes, name: str) -> bytes:
     from PIL import Image, ImageOps, UnidentifiedImageError  # Pillow is already a dependency
 
     try:
-        image = Image.open(io.BytesIO(data))
+        image = Image.open(io.BytesIO(data))  # reads the header only
+        if image.width * image.height > MAX_IMAGE_PIXELS:
+            raise ArtworkError(f"{name} is {image.width} x {image.height} pixels, more than this checker reads "
+                               f"({MAX_IMAGE_PIXELS // 1_000_000} megapixels). Scan or export it at 300 dpi and upload that.")
         image = ImageOps.exif_transpose(image).convert("RGB")
+    except Image.DecompressionBombError as exc:
+        raise ArtworkError(f"{name} claims an image size too large to open safely. "
+                           "Scan or export it at 300 dpi and upload that.") from exc
     except (UnidentifiedImageError, OSError) as exc:
         raise ArtworkError(f"Could not open {name} as an image.") from exc
     dpi = float((image.info.get("dpi") or (0, 0))[0] or 0)

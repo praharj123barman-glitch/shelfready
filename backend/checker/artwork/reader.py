@@ -52,6 +52,8 @@ class ArtworkReader:
         if not raw_lines:  # a scan, a photo or outlined type: read the page image instead
             raw_lines = all_raw = self._ocr_lines()
             source = "ocr"
+        elif invisible_share(self.page) >= INVISIBLE_LAYER_SHARE:
+            source = "ocr_layer"  # a searchable scan: its "live" text is the scanner's OCR guess, not the artwork
         guide_lines = [(line.text, line.box) for line in raw_lines if is_guide_text(line.text)]
         panels = PanelFinder(self.pdf, self.page_no, guide_lines, all_raw).find()
         lines = self._text_lines(raw_lines, panels)
@@ -79,7 +81,11 @@ class ArtworkReader:
         if not ocr_available():
             raise ArtworkError(f"{self.name} has no live text, and OCR is not installed "
                                "(pip install -r requirements.txt adds it).")
-        lines = ocr_lines(self.page)
+        try:
+            lines = ocr_lines(self.page)
+        except Exception as exc:  # an OCR failure must be an error the user sees, never an empty review
+            raise ArtworkError(f"OCR could not read {self.name} ({type(exc).__name__}). "
+                               "Upload the print PDF, or a different scan.") from exc
         if not lines:
             raise ArtworkError(f"{self.name} has no live text, and OCR found no readable text on it either. "
                                "Upload the print PDF, or a sharper scan (300 dpi or more).")
@@ -105,6 +111,18 @@ class ArtworkReader:
                 confidence=raw.confidence,
             ))
         return lines
+
+
+INVISIBLE_LAYER_SHARE = 0.5  # more than half the characters invisible: a searchable scan, not artwork
+
+
+def invisible_share(page: pymupdf.Page) -> float:
+    """Share of the page's characters drawn invisibly (PDF text render mode 3). Scanning software
+    puts its OCR text on the page this way, over the scanned picture, so the file can be searched."""
+    spans = page.get_texttrace()
+    total = sum(len(span["chars"]) for span in spans)
+    invisible = sum(len(span["chars"]) for span in spans if span.get("type") == 3)
+    return invisible / total if total else 0.0
 
 
 def read_barcodes(page: pymupdf.Page, panels: dict[str, BBox], dpi: int = 300) -> list[dict]:

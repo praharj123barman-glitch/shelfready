@@ -34,6 +34,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from .ai.client import AIError, GeminiClient, default_client
+from .ai.injection import instruction_lines
 from .ai.marks import MarkInspector
 from .ai.prompt_material import PromptMaterial
 from .ai.rule_judge import RuleJudge, rules_without_code_checks
@@ -108,7 +109,7 @@ class ReviewPipeline:
             checked = self.pdf.check(art, rules, spec, with_panels=ai_ran)
             timer.seconds.update(checked.seconds)
             report = checked.report
-            if art.text_source == "ocr":
+            if art.text_source != "live":  # read by OCR, ours or the scanner's
                 report = report.with_findings([ocr_capped(f) for f in report.findings])
                 notes.append(ocr_note(art))
             if spec is not None and (missing := spec.missing_fields()):
@@ -117,6 +118,9 @@ class ReviewPipeline:
             not_applicable: list[str] = []
             if ai_ran:
                 report, not_applicable = self._add_ai_findings(report, art, rules, spec, checked.crops, timer)
+                if steering := instruction_lines(art):
+                    report = report.with_findings([no_ai_pass(f) for f in report.findings])
+                    notes.append(steering_note(steering))
             else:
                 notes.insert(0, "AI checks did not run (no GEMINI_API_KEY or AI switched off). Only code checks are shown.")
             report = report.with_findings(self.feedback.apply_waivers(report.findings, artwork_path))
@@ -187,14 +191,16 @@ class ReviewPipeline:
         return corrected_panel(panel) if panel else None
 
 
-OCR_CAVEAT = ("[Text read by OCR from the page image: a misread character can cause this, "
+OCR_CAVEAT = ("[Text read by OCR from the page image: a misread or missed word can cause this, "
               "so it is marked likely, not definite. Confirm it on the artwork.]")
+# decoded from the pixels by the barcode reader and verified by check-digit arithmetic, not read by OCR
+OCR_INDEPENDENT_CHECKS = {"barcode", "barcode_check_digit"}
 
 
 def ocr_capped(finding: Finding) -> Finding:
-    """A problem proven from OCR text is only as sure as the OCR: Definite becomes Likely.
-    Findings that do not rest on read text (for example a decoded barcode) keep their verdict."""
-    if finding.verdict != Verdict.DEFINITE or not any(e.line_ids for e in finding.evidence):
+    """A problem proven from OCR text is only as sure as the OCR: Definite becomes Likely. That includes
+    "missing" findings ("No FSSAI licence number"), which cite no line: OCR may simply have missed it."""
+    if finding.verdict != Verdict.DEFINITE or finding.check in OCR_INDEPENDENT_CHECKS:
         return finding
     return finding.model_copy(update={
         "verdict": Verdict.LIKELY,
@@ -204,6 +210,10 @@ def ocr_capped(finding: Finding) -> Finding:
 
 
 def ocr_note(art: Artwork) -> str:
+    if art.text_source == "ocr_layer":
+        return (f"{art.file_name} is a scan: its {len(art.lines)} text lines come from an invisible OCR layer added "
+                "by the scanning software, not from the artwork file, so issues found in that text are marked "
+                "likely, never definite")
     low = sum(1 for ln in art.lines if ln.confidence < 0.8)
     note = (f"{art.file_name} has no live text, so its {len(art.lines)} text lines were read by OCR"
             + (f" ({low} with low confidence)" if low else "")
@@ -212,6 +222,24 @@ def ocr_note(art: Artwork) -> str:
         note += ("; no dieline was found, so the page is checked as one panel and rules about where copy "
                  "sits (front panel, folds) could not be checked")
     return note
+
+
+STEERING_CAVEAT = ("[Sent to review: the artwork contains text addressed to an AI reviewer, so no AI pass "
+                   "is accepted on it. Please check this rule by eye.]")
+
+
+def no_ai_pass(finding: Finding) -> Finding:
+    """On artwork that tries to steer the AI, an AI pass could be the steering working: a person decides."""
+    if finding.method != "ai" or finding.verdict != Verdict.PASS:
+        return finding
+    return finding.model_copy(update={"verdict": Verdict.REVIEW, "confidence": min(finding.confidence, 0.4),
+                                      "explanation": f"{finding.explanation} {STEERING_CAVEAT}"})
+
+
+def steering_note(lines: list) -> str:
+    quoted = "; ".join(f"{ln.id} '{ln.text[:60]}'" for ln in lines[:3])
+    return (f"the artwork contains text addressed to an AI reviewer ({quoted}); it was not accepted as evidence "
+            "and no AI pass was accepted on this artwork. Text like this should not be on a printed pack")
 
 
 def coverage_table(rules: RuleSet, findings: list[Finding], not_applicable: list[str]) -> list[dict]:

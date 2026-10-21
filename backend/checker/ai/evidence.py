@@ -10,7 +10,9 @@ The model must back each claim with one of three kinds of evidence:
 quotes must appear in the cited line; absence claims are re-checked on the
 named panel (or the whole pack); visual evidence must name a real panel (what
 is in the image cannot be verified in code, so it carries lower confidence).
-Anything that fails is reported as a problem, and the finding is downgraded.
+A line that reads like an instruction to an AI reviewer is never accepted as
+evidence (see injection.py). Anything that fails is reported as a problem, and
+the finding is downgraded.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from ..checks.base import CheckContext, art_evidence
 from ..models import Evidence
+from .injection import is_instruction
 
 
 class CitedEvidence(BaseModel):
@@ -82,6 +85,8 @@ class EvidenceVerifier:
         quote, text = normalise(item.quote or ""), normalise(line.text)
         if not quote or (quote not in text and text not in quote):
             return f"quote '{item.quote}' is not in line {item.line_id} ('{line.text}')"
+        if is_instruction(line.text):  # the words are on the artwork, but they are an attempt to steer the review
+            return f"line {item.line_id} reads like an instruction to an AI reviewer, so it cannot be evidence"
         return None
 
     def _check_visual(self, item: CitedEvidence) -> str | None:

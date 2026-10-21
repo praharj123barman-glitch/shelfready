@@ -86,8 +86,10 @@ class AISettings:
 
     @property
     def routes(self) -> list[tuple[int, str]]:
-        """(key number, model) pairs in the order to try: every model on the first key, then on the next."""
-        return [(i, m) for i in range(len(self.api_keys)) for m in self.model_chain]
+        """(key number, model) pairs in the order to try: the primary model on every key, then the next
+        model on every key. Quota is per key and model, so a refused primary model usually still answers
+        on the next key; moving to a slower fallback model first cost about a minute of timeouts once."""
+        return [(i, m) for m in self.model_chain for i in range(len(self.api_keys))]
 
 
 @dataclass
@@ -214,8 +216,8 @@ class GeminiClient:
         )
 
     def _call_with_fallback(self, prompt, config):
-        """Quota or overload on one model moves straight to the next, then to the same
-        models on the fallback key; when every route refuses, wait once and go round
+        """Quota or overload on one route moves straight to the next (the same model on the
+        next key, then the next model; see AISettings.routes); when every route refuses, wait once and go round
         again before giving up. Returns (response, label of who answered)."""
         if not self.settings.api_keys:  # say so plainly: with no routes the loop below would report "rate limited"
             raise AIError("GEMINI_API_KEY is not set. Add it to .env (see .env.example).")

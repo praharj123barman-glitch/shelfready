@@ -1,14 +1,36 @@
 # Demo video script (about 5 minutes)
 
-**Before recording**
+**Record locally, not through the live link.** The live link depends on this laptop, a free tunnel and free
+AI quotas; a local recording depends only on this laptop. Show the live link at the end instead (or not at all).
+
+**Before recording (10 minutes)**
 * Backend: `cd backend` then `..\.venv\Scripts\python -m uvicorn app:app --port 8000`
 * Frontend in production mode (no dev badge): `cd frontend`, `pnpm build`, then `pnpm start`
-* Before recording, run once: the US sample review, "Compare a new proof" with the generated v2, and the India sample review, so every AI answer comes from the cache (about 10 seconds each).
-* Delete `backend/runs/feedback.json` if you tested waivers, so the demo starts clean.
-* The follow-up chat always asks the model live. Free Gemini quotas reset at midnight Pacific time (about
-  12:30 IST); if a model is out of quota the next one in the chain answers.
-* Browser at 100% zoom, full screen, 1600 px wide or more. Close other tabs.
+* Open http://127.0.0.1:8000/api/health: it must say `"ok":true` and `"ai_available":true`.
+* Run once: the US sample review, "Compare a new proof" with the generated v2, and the India sample review, so
+  every AI answer comes from the cache. Check the headline reads **20 definite, 10 likely, 6 need review,
+  17 passed**; if it differs (a different model answered), say the numbers on screen, not the ones below.
+* Waivers: open http://127.0.0.1:8000/api/feedback. It must list no waivers. If it does, remove each with
+  `Invoke-RestMethod -Method Delete http://127.0.0.1:8000/api/waivers/<id>` (or delete
+  `backend/runs/feedback.json` with the backend stopped).
+* The follow-up chat always asks the model live (5 to 30 s). Free Gemini quotas reset at midnight Pacific
+  time (about 12:30 IST); the primary model is tried on every key before a fallback model answers.
+* Browser at 100% zoom, full screen, 1600 px wide or more. Close other tabs and notifications.
 * Speak slowly. Each block below is about one breath per line.
+
+**Risky steps, and what to do**
+* *The chat answer is slow or fails* (quota): cut the pause in editing, or skip the chat segment; it is 30 s of
+  the video. Never wait on camera for more than a few seconds.
+* *A fresh review* (anything not cached above) can take 20 to 90 s on the free tier: only demo cached inputs.
+* *Accept finding / False alarm* write to the real waiver store: after recording, check the waiver list again.
+* *3D carton* needs a Chromium browser (Chrome or Edge); it does not draw in every WebKit build.
+
+**If the live link must be shown or tested by judges**
+* Start it with `powershell -ExecutionPolicy Bypass -File deploy\go_live.ps1 -Watch` in your own terminal
+  (not from the editor) and keep the laptop plugged in. The watcher keeps Windows awake, restarts the API and
+  the tunnel if they stop, and redeploys the web app when the tunnel address changes.
+* Check from your phone on mobile data: https://shelfready-check.vercel.app, then Review the sample carton.
+* Fallback if it is down: the README's "Run it locally" steps, and the recorded video.
 
 ---
 
@@ -38,7 +60,7 @@ Click the **Findings** tab.
 
 ### 0:40 to 1:05 · The verdict and a definite finding
 
-> Not ready to launch. Twenty definite issues, ten likely, six for review, and sixteen checks that passed.
+> Not ready to launch. Twenty definite issues, ten likely, six for review, and seventeen checks that passed.
 > Passes matter: they tell the reviewer what they no longer need to check.
 
 Click **Calories 166 cannot come from these macronutrients**.

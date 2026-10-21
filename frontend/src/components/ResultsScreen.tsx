@@ -12,6 +12,7 @@ import { ChangesView } from "./ChangesView";
 import { CoverageTable } from "./CoverageTable";
 import { FindingDetail } from "./FindingDetail";
 import { FindingsList } from "./FindingsList";
+import { VerdictLegend } from "./VerdictLegend";
 
 export function ResultsScreen({ run, onBack, onCompare, error }: {
   run: RunResponse; onBack: () => void; onCompare: (input: CompareInput) => void; error: string | null;
@@ -53,6 +54,12 @@ export function ResultsScreen({ run, onBack, onCompare, error }: {
             <b className="text-review">{s.review}</b> need review · <b className="text-pass">{s.pass}</b> passed
             {report.waived > 0 && <> · {report.waived} waived</>}
           </p>
+          <details className="relative text-xs">
+            <summary className="cursor-pointer text-primary hover:underline">What do these mean?</summary>
+            <div className="absolute left-0 top-6 z-20 w-[min(36rem,85vw)] rounded-card border border-line bg-surface p-4 shadow-card">
+              <VerdictLegend compact />
+            </div>
+          </details>
           {atStake.length > 0 && (
             <p className="text-xs text-ink-muted" aria-label="Issues to fix by risk">
               {atStake.map(({ r, n }, i) => (

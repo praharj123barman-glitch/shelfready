@@ -16,7 +16,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -32,7 +32,7 @@ from checker.feedback import FeedbackData, FeedbackStore
 from checker.pdf_work import InlinePdfWork, PageRenders, ProcessPdfWork
 from checker.pipeline import ReviewPipeline, ReviewResult
 from checker.rules import RuleError, RuleSet
-from monitoring import RequestMonitor, RequestRecord, RequestTimingMiddleware
+from monitoring import RateLimiter, RequestMonitor, RequestRecord, RequestTimingMiddleware, is_local
 from runs import ReviewRun, RunInputs, file_url
 
 logging.basicConfig(level=logging.INFO)
@@ -52,7 +52,16 @@ MARKET_RULES: dict[str, list[str]] = {
 DEFAULT_RULES: dict[str, list[str]] = {"US": ["us_fda_food.json"], "India": ["india_fssai_food.json", "artwork_approval_core.json"]}
 UNREADABLE_INPUT = (ArtworkError, SheetError, RuleError)
 
-LOCAL_CLIENTS = {"127.0.0.1", "::1", "localhost", "testclient"}
+# per internet visitor (requests made on this machine are never limited); a review is 10 to 40 s,
+# so these only stop scripted floods, not a person trying things out
+review_limit = RateLimiter(limit=20, window=600, what="reviews")
+chat_limit = RateLimiter(limit=40, window=600, what="questions")
+
+
+def require_local(request: Request, what: str) -> None:
+    """403 unless the request comes from this machine itself (not through the tunnel)."""
+    if not is_local(request):
+        raise HTTPException(403, f"{what} only available from this machine")
 
 # Every PyMuPDF step runs in this many worker processes (see checker/pdf_work.py), so the
 # server never pauses on PDF work. 0 runs it in this process instead (used by the tests).
@@ -92,9 +101,8 @@ def health() -> Health:
 
 @app.get("/api/metrics/requests", response_model=list[RequestRecord])
 def recent_requests(request: Request) -> list[RequestRecord]:
-    """The last requests with status and duration. Local callers only: it describes server activity."""
-    if (request.client.host if request.client else "") not in LOCAL_CLIENTS:
-        raise HTTPException(403, "metrics are only available from this machine")
+    """The last requests with status and duration. Local callers only: the paths contain other people's run ids."""
+    require_local(request, "metrics are")
     return monitor.recent()
 
 
@@ -113,7 +121,7 @@ def sample_set(market: str = "US") -> SampleSet:
 
 # ---------------- reviews ----------------
 
-@app.post("/api/review", response_model=RunResponse)
+@app.post("/api/review", response_model=RunResponse, dependencies=[Depends(review_limit)])
 async def create_review(
     use_samples: bool = Form(False),
     use_ai: bool = Form(True),
@@ -140,7 +148,7 @@ async def create_review(
         return await run_in_threadpool(_finish, run, inputs, result)
 
 
-@app.post("/api/runs/{run_id}/compare", response_model=RunResponse)
+@app.post("/api/runs/{run_id}/compare", response_model=RunResponse, dependencies=[Depends(review_limit)])
 async def compare_proof(
     run_id: str,
     use_ai: bool = Form(True),
@@ -230,7 +238,7 @@ def run_print_image(run_id: str) -> FileResponse:
 
 # ---------------- follow-up questions and feedback ----------------
 
-@app.post("/api/runs/{run_id}/chat", response_model=ChatAnswer)
+@app.post("/api/runs/{run_id}/chat", response_model=ChatAnswer, dependencies=[Depends(chat_limit)])
 def chat(run_id: str, req: ChatRequest) -> ChatAnswer:
     run = ReviewRun.open(run_id)
     finding = run.finding(req.finding_id)
@@ -257,7 +265,10 @@ def feedback(run_id: str, fb: FeedbackRequest) -> dict:
 
 
 @app.get("/api/feedback", response_model=FeedbackData)
-def list_feedback() -> FeedbackData:
+def list_feedback(request: Request) -> FeedbackData:
+    """Every waiver and rule note. Local callers only: it names other people's artwork files, and its
+    waiver ids are what DELETE /api/waivers needs (the web app gets ids from the run it shows)."""
+    require_local(request, "the feedback list is")
     return feedback_store.load()
 
 

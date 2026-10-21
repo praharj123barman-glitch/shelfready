@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { FileSpreadsheet, FileText, ScrollText, Sparkles, Upload } from "lucide-react";
 import { useState } from "react";
 import { ARTWORK_ACCEPT, type Market, type ReviewInput } from "@/lib/api";
+import { VerdictLegend } from "./VerdictLegend";
 
 const MARKET_RULES: Record<Market, string[]> = {
   US: ["US FDA labeling rule pack (21 CFR 101)", "Dancing Fish company rulebook (demo)", "Retailer guidelines in plain prose (demo, read by AI)"],
@@ -63,8 +64,9 @@ export function StartScreen({ aiAvailable, error, onStart }: Props) {
         <p className="text-sm font-semibold uppercase tracking-wide text-primary">Pre-print artwork review</p>
         <h1 className="mt-2 text-4xl font-bold tracking-tight text-ink">Is this artwork ready to launch?</h1>
         <p className="mt-3 max-w-2xl text-lg text-ink-muted">
-          ShelfReady reads the live text, layers and marks in a packaging PDF, checks them against regulations, your
-          company rulebook and the approved content sheet, and shows the evidence behind every finding.
+          ShelfReady reads the live text, layers and marks in a packaging PDF (or a scan or photo, by OCR), checks
+          them against regulations, your company rulebook and the approved content sheet, and shows the evidence
+          behind every finding.
         </p>
       </motion.div>
 
@@ -136,6 +138,10 @@ export function StartScreen({ aiAvailable, error, onStart }: Props) {
           {error}
         </div>
       )}
+
+      <div className="mt-6">
+        <VerdictLegend />
+      </div>
     </div>
   );
 }

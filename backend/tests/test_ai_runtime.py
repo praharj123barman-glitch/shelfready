@@ -110,9 +110,19 @@ def test_cooldown_never_blocks_a_model_that_could_answer():
 def test_second_key_is_used_when_the_first_is_out_of_quota():
     client = client_with({"a": quota_error, "b": quota_error}, second_key_behaviour={"a": lambda: "ok", "b": quota_error})
     assert client._call_with_fallback("p", None) == ("ok", "a (key 2)")  # labelled, so the UI shows which key answered
-    assert client._sdk_clients[0].calls == ["a", "b"]
+    assert client._sdk_clients[0].calls == ["a"]  # model a on key 2 comes before model b on key 1
     assert client._call_with_fallback("p", None) == ("ok", "a (key 2)")
-    assert client._sdk_clients[0].calls == ["a", "b"]  # the exhausted key is not retried within the cooldown
+    assert client._sdk_clients[0].calls == ["a"]  # the exhausted route is not retried within the cooldown
+
+
+def test_the_preferred_model_is_tried_on_every_key_before_a_fallback_model():
+    """Measured: with key 1 out of quota on the primary model, trying the slower preview model on key 1
+    first cost about 60 s of timeouts while key 2 still had quota for the primary model."""
+    def slow_timeout():
+        raise RuntimeError("504 DEADLINE_EXCEEDED")
+    client = client_with({"a": quota_error, "b": slow_timeout}, second_key_behaviour={"a": lambda: "ok", "b": slow_timeout})
+    assert client._call_with_fallback("p", None) == ("ok", "a (key 2)")
+    assert client._sdk_clients[0].calls == ["a"] and client._sdk_clients[1].calls == ["a"]
 
 
 def test_parallel_first_calls_share_one_sdk_client(monkeypatch):

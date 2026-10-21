@@ -83,6 +83,7 @@ run's sheet and rules, carries the waivers over, then `compare()` diffs the text
 | `HiddenTextDetector` | `checker/artwork/hidden_text.py` | Text painted over by a later opaque shape |
 | `GeminiClient` | `checker/ai/client.py` | The only class that calls the model: fallbacks, retries, cache |
 | `EvidenceVerifier` | `checker/ai/evidence.py` | Checks every quote, absence claim and panel the model cites |
+| `instruction_lines` | `checker/ai/injection.py` | Artwork lines that try to instruct the AI reviewer |
 | `RuleJudge` | `checker/ai/rule_judge.py` | AI verdicts for rules no code check covers |
 | `MarkInspector` | `checker/ai/marks.py` | Logos and certification seals from panel images |
 | `RulebookReader` | `checker/ai/rulebook_reader.py` | Prose rules to `Rule` objects, dropping any whose quote is not in the document |
@@ -146,6 +147,12 @@ loaded. There is no list to update and no market `if`.
   `rule_judge.py`). Image evidence may still support an issue (LIKELY): a false alarm costs a look, a false
   pass can ship a defect.
 - Model errors become "could not be checked automatically" findings, never passes.
+- Artwork text is data, never an instruction. Every system prompt says so, and code does not rely on it:
+  `ai/injection.py` finds lines that address an AI reviewer, `EvidenceVerifier` refuses them as evidence, and
+  while any are on the artwork every AI pass goes to REVIEW (`no_ai_pass` in pipeline.py). Tested in
+  `tests/test_prompt_injection.py` with a scripted model that obeys the artwork.
+- Text read by OCR, ours or a scanner's invisible layer, caps every Definite at Likely (`ocr_capped`), missing
+  items included; only the barcode checks, which decode pixels and verify a check digit, keep Definite.
 - `GeminiClient` is the only code that calls the model. Its cache stores real model output keyed on the full
   request, and the result lists which models answered.
 - The tests in `tests/test_ai_guardrails.py` feed hand-made bad answers through this layer with no API calls.
@@ -168,12 +175,14 @@ loaded. There is no list to update and no market `if`.
   `runs/_blobs` and hard-linked into each run folder, so every folder stays complete. `python -m manage_runs`
   shows disk use (`stats`), applies this to old runs (`share`) and deletes old runs only with
   `prune --keep N --yes`.
-- **Model and key fallback.** `GeminiClient` tries each (key, model) route in order; one that refused in the
-  last 60 seconds goes to the back of the queue (it is still tried). Timeouts are enforced without waiting for
-  the stuck call.
+- **Model and key fallback.** `GeminiClient` tries each (key, model) route in order: the primary model on every
+  key, then the next model on every key. A route that refused in the last 60 seconds goes to the back of the
+  queue (it is still tried). Timeouts are enforced without waiting for the stuck call.
 - **Monitoring.** `backend/monitoring.py` logs one line per request (request id, status, duration) and adds
-  `X-Request-ID` and `Server-Timing` headers. `GET /api/metrics/requests` lists recent requests (local callers
-  only). Each `ReviewResult` carries `timings` per stage, shown in the results header.
+  `X-Request-ID` and `Server-Timing` headers. `GET /api/metrics/requests` and `GET /api/feedback` answer only
+  requests made on this machine: `is_local` also rejects requests carrying tunnel or proxy headers, because the
+  demo's tunnel connects from 127.0.0.1. `RateLimiter` caps reviews and questions per internet visitor. Each
+  `ReviewResult` carries `timings` per stage, shown in the results header.
 
 ## Testing
 
