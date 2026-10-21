@@ -7,8 +7,8 @@ person, and shows the evidence behind every finding.
 Built for **Esko AIForge 2026**, problem statement 2: *Is this Packaging Artwork ready to launch?*
 
 **Live demo: https://shelfready-check.vercel.app** (click *Review the sample carton*). The web app runs on
-Vercel; the checker service runs on the author's machine behind a Cloudflare tunnel, so if the page says it
-cannot reach the checker, run it locally (below).
+Vercel and the checker service on Modal (serverless), so it works around the clock. After a quiet spell the
+checker takes about 10 seconds to wake up on the first request.
 
 ![Results screen](docs/results.png)
 
@@ -293,8 +293,9 @@ shows disk use and `python -m manage_runs prune --keep 50` lists (and with `--ye
   rule and the evidence checks still apply, but a reviewer should treat any odd text on a proof as suspect.
 * Anyone with a review link can open that review and its artwork (links are 48-bit random ids and are never
   listed). The public demo is meant for sample and test files, not confidential artwork.
-* The live demo's checker runs on the author's laptop through a free Cloudflare quick tunnel: it is only up
-  while that laptop is on (see Deploying).
+* The live demo runs on Modal's free plan ($30 of compute credit a month) and free Gemini quotas. If either
+  runs out, the checker or its AI part stops until the next month or day; the app then says so, and the
+  local setup above still works. The per-visitor limit is best effort there (see Deploying).
 
 ## Deploying
 
@@ -304,15 +305,21 @@ The backend needs a Python host that can install PyMuPDF and zxing-cpp wheels (L
 `NEXT_PUBLIC_API_URL` set to the backend's URL. Reviews are stored on the server's disk (`backend/runs`), so on
 hosts with temporary disks they disappear on restart.
 
-The live demo uses `deploy/go_live.ps1`: it starts the API on this PC, opens a Cloudflare quick tunnel to it,
-and rebuilds the Vercel app with the tunnel's address. A quick tunnel gets a new address each time and does not
-survive the network dropping (on 21 Oct it stopped while the laptop slept), so run it with `-Watch`: it keeps
-Windows awake while its window is open, checks the API and the public address every 30 s, restarts what
-stopped and redeploys the web app when the address changed. Closing the watchdog's window stops the demo
-(on 21 Oct a closed window took it down), so for judging it runs as the scheduled task `ShelfReadyLive`,
-which starts it again within 5 minutes and at logon. Through the tunnel, the request log and the
-waiver list are refused (they would show other visitors' reviews), and each visitor is limited to 20 reviews
-and 40 questions per 10 minutes, so one visitor cannot use up the AI quota.
+**The live demo** runs the API on Modal with `deploy/modal_app.py`: `python -m modal deploy deploy/modal_app.py`
+from the project folder, after creating a Modal secret named `shelfready` with the Gemini variables
+(`modal secret create shelfready --from-dotenv <file>`). Reviews, waivers and cached AI answers live on the
+Modal volume `shelfready-runs`, so shared review links survive the container stopping (tested: a review made
+on one container reopened an hour later on a new one). At most one container runs; it stops 10 minutes after
+the last request and starts again in about 10 s. The web address is fixed, so Vercel is built once with
+`NEXT_PUBLIC_API_URL` set to it. The request log and the waiver list answer only requests made on the server
+itself, and each visitor is limited to 20 reviews and 40 questions per 10 minutes. The count is kept in the
+container's memory, so while Modal replaces a container (two briefly overlap) it is best effort.
+
+**Fallback: this PC.** `deploy/go_live.ps1 -Watch` runs the API here behind a Cloudflare quick tunnel and
+redeploys the Vercel app with the tunnel's address (it changes on every start). It keeps Windows awake and
+restarts what stopped. This was the live setup until 21 Oct, when a sleeping laptop and a closed window each
+took it down; that is why the demo moved to Modal. The scheduled task `ShelfReadyLive` that ran it is
+disabled, not deleted.
 
 ## Repository layout
 

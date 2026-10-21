@@ -1,7 +1,9 @@
 # Demo video script (about 5 minutes)
 
-**Record locally, not through the live link.** The live link depends on this laptop, a free tunnel and free
-AI quotas; a local recording depends only on this laptop. Show the live link at the end instead (or not at all).
+**Record locally or on the live link.** The live link (Vercel + Modal) has the sample's AI answers cached and
+works without this laptop; open it once a minute before recording so the checker is awake (it sleeps after
+10 idle minutes and takes about 10 s to start). A local recording has no wake-up and no network in the way.
+For the live link, skip the local steps below and check https://shelfready-check.vercel.app shows the numbers.
 
 **Before recording (10 minutes)**
 * Backend: `cd backend` then `..\.venv\Scripts\python -m uvicorn app:app --port 8000`
@@ -25,12 +27,14 @@ AI quotas; a local recording depends only on this laptop. Show the live link at 
 * *Accept finding / False alarm* write to the real waiver store: after recording, check the waiver list again.
 * *3D carton* needs a Chromium browser (Chrome or Edge); it does not draw in every WebKit build.
 
-**If the live link must be shown or tested by judges**
-* Start it with `powershell -ExecutionPolicy Bypass -File deploy\go_live.ps1 -Watch` in your own terminal
-  (not from the editor) and keep the laptop plugged in. The watcher keeps Windows awake, restarts the API and
-  the tunnel if they stop, and redeploys the web app when the tunnel address changes.
-* Check from your phone on mobile data: https://shelfready-check.vercel.app, then Review the sample carton.
-* Fallback if it is down: the README's "Run it locally" steps, and the recorded video.
+**The live link for judges**
+* It runs on Vercel and Modal, independent of this laptop. Check it from your phone on mobile data:
+  https://shelfready-check.vercel.app, then Review the sample carton (the first request after a quiet spell
+  waits about 10 s for the checker to wake).
+* Modal dashboard (usage of the free $30 monthly credit, logs): https://modal.com/apps
+* Fallbacks if it is down: the recorded video, the README's "Run it locally" steps, or this PC
+  (`Enable-ScheduledTask ShelfReadyLive; Start-ScheduledTask ShelfReadyLive` runs the laptop setup again,
+  which redeploys Vercel with the tunnel address).
 
 ---
 

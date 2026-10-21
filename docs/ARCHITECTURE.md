@@ -181,7 +181,9 @@ loaded. There is no list to update and no market `if`.
 - **Monitoring.** `backend/monitoring.py` logs one line per request (request id, status, duration) and adds
   `X-Request-ID` and `Server-Timing` headers. `GET /api/metrics/requests` and `GET /api/feedback` answer only
   requests made on this machine: `is_local` also rejects requests carrying tunnel or proxy headers, because the
-  demo's tunnel connects from 127.0.0.1. `RateLimiter` caps reviews and questions per internet visitor. Each
+  fallback tunnel connects from 127.0.0.1 (on Modal, the live host, requests carry the visitor's own address).
+  `RateLimiter` caps reviews and questions per internet visitor, in memory (best effort on Modal while it
+  replaces a container). The Modal setup is `deploy/modal_app.py`; see the README's Deploying section. Each
   `ReviewResult` carries `timings` per stage, shown in the results header.
 
 ## Testing

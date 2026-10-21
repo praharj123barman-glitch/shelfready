@@ -39,8 +39,8 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = QUICK_MS
     if (e instanceof DOMException && e.name === "TimeoutError")
       throw new ApiError(`The checker did not answer within ${Math.round(timeoutMs / 1000)} s. Please try again in a minute.`);
     throw new ApiError(
-      `The checker service cannot be reached (${API_URL}). If you are using the live demo, the checker runs on the ` +
-      "author's computer and may be offline: try again later, or run ShelfReady locally (see the README).",
+      `The checker service cannot be reached (${API_URL}). Please try again in a minute, ` +
+      "or run ShelfReady locally (see the README).",
     );
   }
   if (!res.ok) {

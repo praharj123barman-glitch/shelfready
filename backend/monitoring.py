@@ -77,7 +77,8 @@ class RateLimiter:
 
     Protects a public demo from one visitor using up the AI quota or the machine (each review
     can take a 25 MB upload, OCR and several model calls). Requests made on this machine are
-    never limited."""
+    never limited. The count lives in one process: on a host that briefly runs two containers
+    (Modal, while it replaces one) the limit is best effort, not exact."""
 
     def __init__(self, limit: int, window: float, what: str) -> None:
         self.limit, self.window, self.what = limit, window, what
