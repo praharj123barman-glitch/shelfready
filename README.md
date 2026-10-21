@@ -308,7 +308,9 @@ The live demo uses `deploy/go_live.ps1`: it starts the API on this PC, opens a C
 and rebuilds the Vercel app with the tunnel's address. A quick tunnel gets a new address each time and does not
 survive the network dropping (on 21 Oct it stopped while the laptop slept), so run it with `-Watch`: it keeps
 Windows awake while its window is open, checks the API and the public address every 30 s, restarts what
-stopped and redeploys the web app when the address changed. Through the tunnel, the request log and the
+stopped and redeploys the web app when the address changed. Closing the watchdog's window stops the demo
+(on 21 Oct a closed window took it down), so for judging it runs as the scheduled task `ShelfReadyLive`,
+which starts it again within 5 minutes and at logon. Through the tunnel, the request log and the
 waiver list are refused (they would show other visitors' reviews), and each visitor is limited to 20 reviews
 and 40 questions per 10 minutes, so one visitor cannot use up the AI quota.
 

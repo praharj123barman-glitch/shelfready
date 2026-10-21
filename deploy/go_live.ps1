@@ -75,11 +75,17 @@ if (-not $Watch) {
 }
 
 # ---------------- watch ----------------
+# Closing this window stops the watchdog AND (under the scheduled task) the API and tunnel it started:
+# on 21 Oct a closed window took the demo down. The title says so; the task restarts it within 5 minutes.
+$Host.UI.RawUI.WindowTitle = "ShelfReady watchdog - keeps the live demo up - do not close"
 Add-Type -Namespace ShelfReady -Name Power -MemberDefinition @'
 [DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint esFlags);
 '@
-[ShelfReady.Power]::SetThreadExecutionState([uint32]"0x80000001") | Out-Null  # ES_CONTINUOUS | ES_SYSTEM_REQUIRED
-Write-Host "Watching (every 30 s). This PC will not go to sleep on its own while this window is open. Ctrl+C stops."
+# ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED: on this laptop the screen turning off led to
+# standby (event 506) and the tunnel dropping, so the display is kept on as well while watching
+[ShelfReady.Power]::SetThreadExecutionState([uint32]"0x80000003") | Out-Null
+Write-Host "Watching (every 30 s). This PC and its screen stay on while this window is open."
+Write-Host "Do not close this window during judging. To stop the demo: Disable-ScheduledTask ShelfReadyLive, then close it."
 [void](Wait-PublicUrl $url)
 $tunnelFailures = 0
 try {

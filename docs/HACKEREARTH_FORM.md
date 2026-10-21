@@ -7,11 +7,17 @@ another name).
 
 ## Title
 
-ShelfReady: is this packaging artwork ready to launch?
+ShelfReady: Evidence-First AI Packaging Compliance Review
+
+(Tagline, if a field asks for one: *Code proves, AI reasons, code checks the AI.*)
 
 ---
 
 ## Description
+
+ShelfReady is an AI-assisted packaging artwork review system. It combines deterministic compliance checks,
+evidence-backed findings and confidence-aware AI reasoning to help teams find likely launch blockers before
+a carton goes to print.
 
 **The problem.** Before a carton is printed, someone must check the artwork against the approved product data
 and the rules of its market: regulation (US FDA 21 CFR 101, India FSSAI) plus the company's own rulebook. The
