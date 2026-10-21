@@ -11,6 +11,7 @@ import re
 
 from .artwork.ocr import FONT as OCR_FONT
 from .models import Artwork, BBox, TextLine
+from .nutrition import nutrition_title
 
 # headings that start a labelled block on the back panel
 HEADINGS = ["INGREDIENTS:", "ALLERGEN INFORMATION:", "DIETARY INFORMATION:"]
@@ -120,17 +121,33 @@ def net_quantity_lines(art: Artwork) -> list[TextLine]:
     """Lines that declare the pack's net quantity, best first.
 
     '3.8g' next to the word 'Fat' is a nutrient amount, not a net weight, so any
-    quantity with nutrient words beside it is skipped. 'NET WT' lines and the
-    front panel are preferred.
+    quantity with nutrient words beside it is skipped. A bare amount (no 'net' in
+    its line) is also skipped when a nutrient word is anywhere on its row: OCR of a
+    label photo reads 'Total Fat' and its '1.5g' as separate pieces at opposite ends
+    of the row (found on real Cheerios and Oreo labels). 'NET WT' lines and the
+    front panel are preferred. Bare amounts inside the Nutrition Facts box are
+    nutrient amounts too (same box as nutrition.read_nutrition_panel uses).
     """
+    title = nutrition_title(art)
+
+    def in_nutrition_box(ln: TextLine) -> bool:
+        return (title is not None and ln.panel == title.panel and ln.bbox.y0 >= title.bbox.y0 - 1
+                and abs(ln.bbox.cx - title.bbox.cx) < 120)
+
     out = []
     for ln in art.copy_lines():
         text = ln.text.strip()
         if not QUANTITY.match(text) or len(text) > 30:
             continue
+        if "net" not in text.lower() and in_nutrition_box(ln):
+            continue
         neighbours = [o for o in art.copy_lines(ln.panel) if o.id != ln.id
                       and abs(o.bbox.cy - ln.bbox.cy) < 2.2 * ln.size and abs(o.bbox.cx - ln.bbox.cx) < 40]
         if NUTRIENT_WORDS.search(text) or any(NUTRIENT_WORDS.search(o.text) for o in neighbours):
+            continue
+        same_row = [o for o in art.copy_lines(ln.panel) if o.id != ln.id
+                    and abs(o.bbox.cy - ln.bbox.cy) < 0.6 * max(o.size, ln.size)]
+        if "net" not in text.lower() and any(NUTRIENT_WORDS.search(o.text) for o in same_row):
             continue
         out.append(ln)
     return sorted(out, key=lambda l: ("net" not in l.text.lower(), l.panel != "front"))

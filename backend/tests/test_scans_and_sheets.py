@@ -142,6 +142,26 @@ def test_the_scan_finds_what_the_pdf_finds(scan_review):
     assert live_issues <= scan_issues, live_issues - scan_issues
 
 
+def test_label_photo_amounts_are_not_mistaken_for_the_net_weight():
+    """Seen on real Cheerios and Oreo label photos: OCR split the title into 'Nutrition' / 'Facts' and read
+    'Total Fat' and its '1.5g' as separate pieces far apart, so '1.5g' was reported as the net weight."""
+    from checker.models import Artwork, BBox, TextLine
+    from checker.nutrition import nutrition_title
+    from checker.sections import net_quantity_lines
+
+    def line(i, text, x, y, size=9.0):
+        return TextLine(id=f"L{i:03d}", text=text, bbox=BBox(x0=x, y0=y, x1=x + 6 * len(text), y1=y + size),
+                        size=size, font="OCR", panel="front")
+    lines = [line(0, "Nutrition", 10, 10, 20), line(1, "Facts", 10, 32, 20),
+             line(2, "Total Fat", 10, 80), line(3, "1.5g", 200, 80),  # name and amount far apart on one row
+             line(4, "Sat Fat", 10, 300), line(5, "Less than", 60, 300), line(6, "20g", 120, 300),  # footnote
+             line(7, "NET WT 12 OZ (340g)", 400, 500)]
+    art = Artwork(file_name="photo.pdf", width=600, height=600, panels={"front": BBox(x0=0, y0=0, x1=600, y1=600)},
+                  lines=lines, text_source="ocr")
+    assert nutrition_title(art).text == "Nutrition"
+    assert [ln.text for ln in net_quantity_lines(art)] == ["NET WT 12 OZ (340g)"]
+
+
 def test_ocr_digit_fixes_are_only_the_safe_ones():
     assert fix_digits("Incl. Og Added Sugars") == "Incl. 0g Added Sugars"
     assert fix_digits("Calories 1O0") == "Calories 100"

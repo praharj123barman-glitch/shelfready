@@ -255,7 +255,7 @@ Tests and eval:
 
 ```bash
 cd backend
-../.venv/Scripts/python -m pytest -q          # 166 tests: math, parsing, OCR, sheet layouts, guardrails, prompt injection, markets, feedback, compare, API, public-demo safety, full sample run
+../.venv/Scripts/python -m pytest -q          # 167 tests: math, parsing, OCR, sheet layouts, guardrails, prompt injection, markets, feedback, compare, API, public-demo safety, full sample run
 ../.venv/Scripts/python -m eval.run_eval      # mutation eval, writes eval/RESULTS.md
 ```
 

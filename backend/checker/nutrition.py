@@ -95,8 +95,25 @@ def _number_right_of(label: TextLine, region: list[TextLine]) -> TextLine | None
                  and o.bbox.x0 > label.bbox.x0 and _same_row(o, label)), None)
 
 
+def nutrition_title(art: Artwork) -> TextLine | None:
+    """The 'Nutrition Facts' heading. OCR of a label photo can read the large title as two lines,
+    'Nutrition' with 'Facts' below or beside it (found on a real Cheerios label): the 'Nutrition' line
+    then stands for the heading."""
+    lines = art.copy_lines()
+    exact = next((ln for ln in lines if ln.text.strip().lower() == "nutrition facts"), None)
+    if exact:
+        return exact
+    for top in (ln for ln in lines if ln.text.strip().lower() == "nutrition"):
+        for facts in (ln for ln in lines if ln.text.strip().lower() == "facts" and ln.panel == top.panel):
+            below = 0 < facts.bbox.cy - top.bbox.cy < 2.5 * top.size and abs(facts.bbox.x0 - top.bbox.x0) < 2 * top.size
+            beside = abs(facts.bbox.cy - top.bbox.cy) < 0.6 * top.size and 0 <= facts.bbox.x0 - top.bbox.x1 < 2 * top.size
+            if below or beside:
+                return top
+    return None
+
+
 def read_nutrition_panel(art: Artwork) -> NutritionPanel | None:
-    title = next((ln for ln in art.copy_lines() if ln.text.strip().lower() == "nutrition facts"), None)
+    title = nutrition_title(art)
     if title is None:
         return None
     region = [ln for ln in art.copy_lines(title.panel) if ln.bbox.y0 >= title.bbox.y0 - 1 and abs(ln.bbox.cx - title.bbox.cx) < 120]
